@@ -2,7 +2,7 @@
 
 Runs One UI 6 Watch (`R870XXU1IYI1`, Android 14, kernel 4.19) on a Samsung Galaxy Watch 4 (SM-R870) that has already been updated to One UI 8 Watch (`R870XXS2JZG3`).
 
-Samsung does not allow this. The One UI 8 update raises the bootloader binary revision from 1 to 2, the revision is enforced by an eFuse counter, and every One UI 6 image is signed for revision 1. Flashing stock One UI 6 through Odin or NetOdin is refused. With an unlocked bootloader the old system can still run on the new bootloader, together with the TEE, the hypervisor and the power management firmware that come with it, after fixing ten incompatibilities between them.
+Samsung does not allow this. The One UI 8 update raises the bootloader binary revision from 1 to 2, the revision is enforced by an eFuse counter, and every One UI 6 image is signed for revision 1. Flashing stock One UI 6 through Odin or NetOdin is refused. With an unlocked bootloader the old system can still run on the new bootloader, together with the TEE, the hypervisor and the power management firmware that come with it, after fixing eleven incompatibilities between them.
 
 **Status: boots and runs on both CPU cores, with CPU idle power-down and system sleep working.** Bluetooth and phone pairing work; sensors and Samsung Health have not been checked. Details in `docs/STATUS.md`.
 
@@ -20,12 +20,13 @@ Samsung does not allow this. The One UI 8 update raises the bootloader binary re
 | The second core has MPIDR `0x100`, the 4.19 device tree says `0x1`; `CPU_ON` wakes nothing | device tree: `cpu@0001` reg `0x100` and a `cpu-map` |
 | EL3 powers no core down (C2 fails, `CPU_OFF` returns) until the kernel sends `SMC_CMD_CPUPM_ENABLE`, which 4.19 never does | kernel patches: the 5.15 exynos-cpupm driver ported to 4.19, the core `INT_EN` writes dropped; device tree: the rev2 `exynos-cpupm` node |
 | With real MPIDRs in the device tree, the 4.19 `sleep.S` gives both cores the same saved-context slot, and both cores in C2 hang the system | kernel patch: hash the MPIDR as it is, as mainline does |
+| The bootloader blanks the panel before the kernel starts, so the screen stays black for about 20 s until the boot animation; it also leaves its own display window enabled with an address the kernel's SysMMU does not map | kernel patch: a boot splash sent once at probe, with every other display window disabled first |
 
-The kernel is Samsung's 4.19 source for `R870XXU1IYI1` with seven patches for the rev2 bootloader and an eighth that adds a charge limit (`batt_full_capacity`, off by default), built without the Samsung hypervisor clients (UH, RKP, KDP): the KDP interface of the rev2 hypervisor changed, and its RKP expects the 5.15 kernel memory layout. Each problem, with the log lines that showed it, is described in `docs/LESSONS.md`.
+The kernel is Samsung's 4.19 source for `R870XXU1IYI1` with seven patches for the rev2 bootloader, an eighth that adds a charge limit (`batt_full_capacity`, off by default) and a ninth that shows a boot splash on the blank panel, built without the Samsung hypervisor clients (UH, RKP, KDP): the KDP interface of the rev2 hypervisor changed, and its RKP expects the 5.15 kernel memory layout. Each problem, with the log lines that showed it, is described in `docs/LESSONS.md`.
 
 The boot image does not open ADB over TCP. For ADB on a fixed port, with key authentication, use the `adb-wifi-keep` module from [gw4-magisk-modules](https://github.com/jmcjm/gw4-magisk-modules): it keeps Wi-Fi on and adbd on TCP 5555 after every boot and authorizes the keys it ships.
 
-The system partitions (`super`, `metadata`, `userdata`) are the stock One UI 6 ones. Everything that changes is in `boot`: the kernel, the device tree, and a Magisk `overlay.d` in the ramdisk that puts the trustlets and modules in place before the services that need them start.
+The system partitions (`super`, `metadata`, `userdata`) are the stock One UI 6 ones. Everything that changes is in `boot`: the kernel, the device tree, and a Magisk `overlay.d` in the ramdisk that puts the trustlets and modules in place before the services that need them start, and starts the boot animation right after SurfaceFlinger.
 
 ## Requirements
 
@@ -54,7 +55,7 @@ Then flash from the Wi-Fi recovery with `scripts/flash-chunks.sh`. Backup, the M
 |---|---|
 | `build.sh` | All build steps |
 | `kernel/sources.txt` | Samsung source packages (opensource.samsung.com ids and SHA-256) |
-| `kernel/patches/` | The kernel patches: `0001` to `0007` for bootloader rev2, `0008` the charge limit |
+| `kernel/patches/` | The kernel patches: `0001` to `0007` for bootloader rev2, `0008` the charge limit, `0009` the boot splash |
 | `kernel/nouh.config` | Options disabled in `exynos5515-freshbl_defconfig` |
 | `overlay/` | Magisk `overlay.d` scripts and the expected trustlet hashes |
 | `scripts/` | Download from opensource.samsung.com, signature stripping, device tree patch, chunked flashing |

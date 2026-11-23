@@ -45,7 +45,7 @@ Compare the hashes from the watch with `SHA256SUMS` before going on. Pulling `su
 
 `source` downloads the three packages listed in `kernel/sources.txt` from opensource.samsung.com and checks their SHA-256. It unpacks them in order (base `R860XXU1IXK1`, then the SM-R870 device tree and `exynos5515-freshbl_defconfig`, then the `R870XXU1IYI1` kernel update) and applies the patches.
 
-`kernel` builds `exynos5515-freshbl_defconfig` with the options in `kernel/nouh.config` disabled. The host programs of the 4.19 tree do not build with current OpenSSL and without libyaml, hence the container. The banner values (`KBUILD_BUILD_*` in `build.sh`) are those of the tested build, so with patches `0001` to `0007` the result is byte for byte the tested kernel; its hash is in `STATUS.md`. Patch `0008` (the charge limit below) changes the image; `STATUS.md` has the hash of the build with it. To build the tested kernel, move `0008` out of `kernel/patches/` before `./build.sh source`.
+`kernel` builds `exynos5515-freshbl_defconfig` with the options in `kernel/nouh.config` disabled. The host programs of the 4.19 tree do not build with current OpenSSL and without libyaml, hence the container. The banner values (`KBUILD_BUILD_*` in `build.sh`) are those of the tested build, so with all patches (`0001` to `0009`) the result is byte for byte the flashed kernel; its hash is in `STATUS.md`.
 
 ### Charge limit
 
@@ -71,6 +71,12 @@ echo 100 > batt_full_capacity                    # no limit again: status back t
 
 With a limit above the current capacity, watch `capacity` and `status` while it charges: `Not charging` at the limit, `Charging` again at limit minus `batt_full_capacity_hyst`.
 
+### Boot splash
+
+Bootloader rev2 blanks the panel before it starts the kernel, and the MCD panel path of the display driver sends nothing to it until the first frame of the boot animation, about 20 s later. Patch `0009` draws a power symbol into the display framebuffer and sends it to the panel once, at the end of the display controller probe, about 1 s after power-on. The panel keeps the image in its own memory until SurfaceFlinger sends the next frame.
+
+The splash is `CONFIG_EXYNOS_DECON_BOOT_SPLASH` (on by default). To build without it, add a line `EXYNOS_DECON_BOOT_SPLASH` to `kernel/nouh.config`.
+
 ## 4. Firmware, trustlets, Magisk boot image
 
 ```bash
@@ -91,7 +97,7 @@ With a limit above the current capacity, watch `capacity` and `status` while it 
 
 | Output | Built from |
 |---|---|
-| `boot.img` | the Magisk-patched IYI1 image with the 4.19 kernel from step 3 (Magisk's DEFEX hexpatch, gzip), the IYI1 device tree adapted by `scripts/patch-dts.py` (the two nodes for the bootloader overlay, the second core's MPIDR and `cpu-map`, the rev2 `exynos-cpupm` node), and in the ramdisk the overlay with the JZG3 trustlets and the rebuilt kernel modules |
+| `boot.img` | the Magisk-patched IYI1 image with the 4.19 kernel from step 3 (Magisk's DEFEX hexpatch, gzip), the IYI1 device tree adapted by `scripts/patch-dts.py` (the two nodes for the bootloader overlay, the second core's MPIDR and `cpu-map`, the rev2 `exynos-cpupm` node), and in the ramdisk the overlay with the JZG3 trustlets, the rebuilt kernel modules and a trigger that starts the boot animation right after SurfaceFlinger |
 | `dtbo.img`, `vbmeta_system.img` | stock IYI1 without the Samsung signature footer |
 | `vbmeta.img` | stock IYI1 without the footer, flags `3` |
 

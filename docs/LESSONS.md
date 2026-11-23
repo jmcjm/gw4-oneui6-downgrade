@@ -126,6 +126,22 @@ The Samsung 4.19 `arch/arm64/kernel/sleep.S` shifts a multithreading MPIDR right
 
 Fix: `kernel/patches/0006-arm64-sleep-...` uses the MPIDR as it is.
 
+## 11. The bootloader leaves its own display window enabled
+
+Bootloader rev2 blanks the panel before it starts the kernel (problem 6), and the MCD panel path of `decon_initial_display()` sends no frame: it expects the bootloader logo to stay on. The screen stayed black for about 20 s, until the first frame of the boot animation.
+
+The first version of the boot splash (`0009`) drew into the decon framebuffer, set window 0 and DPP0 to it and sent one frame, the way the non-MCD path does. Every boot then panicked at 1.1 s:
+
+```
+decon_initial_display: boot splash
+exynos-sysmmu 13820000.sysmmu: From [G0, G1, VG], SysMMU READ PAGE FAULT at 0x9e0cf000
+Kernel panic - not syncing: (13820000.sysmmu) ... READ PAGE FAULT
+```
+
+The DECON register dump printed with the fault showed `DATA_PATH_CONTROL_0` `0x11` (windows 0 and 1 enabled) and `DATA_PATH_CONTROL_1` `0x10` (window 1 on channel 1). Window 1, full screen, was the bootloader's, with the physical address of its own buffer in DPP1, programmed while the DPU SysMMU was bypassed. In the kernel that SysMMU translates from probe on (`sysmmu,hold-rpm-on-boot`), and its page table maps only what the kernel mapped. Our window was fine: DPP0 read the framebuffer at IOVA `0x10000000`, and the SysMMU TLB held its pages. The frame fetched both windows, and every SysMMU page fault is fatal (`exynos_sysmmu_irq()` retries only page table walk errors). Without the splash the first frame comes from the HWC, which programs or disables every window first, so the leftover window is never fetched.
+
+Fix: `kernel/patches/0009-decon-...` disables every window except the default one before it sends the frame.
+
 ## Hypervisor clients are disabled
 
 The kernel is built without `CONFIG_UH`, `CONFIG_RKP` and `CONFIG_KDP`. The bootloader loads the Samsung hypervisor (uH) at EL2 anyway; the 4.19 kernel only never calls it.

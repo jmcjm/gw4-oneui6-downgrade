@@ -8,7 +8,7 @@ Device: Samsung Galaxy Watch 4 (SM-R870), bootloader `R870XXS2JZG3` (binary revi
 |---|---|
 | Boot to the One UI 6 Watch face (`R870XXU1IYI1`, Android 14, kernel 4.19.151) | works |
 | Metadata encryption and file-based encryption of `/data`, KeyMint, gatekeeper | works (JZG3 trustlets) |
-| Display | works |
+| Display | works; boot splash about 1 s after power-on (patch `0009`), until the boot animation |
 | Charging (wireless, `p9222`) | works |
 | Wi-Fi | works, `wlan0` gets an address; ADB over TCP on port 5555 with key authentication through the `adb-wifi-keep` module |
 | Magisk 31.1 | works, `su` in the ADB shell; also a Magisk 31.1 build of our own (`31.1-wear`), put in with `build.sh magisk` |
@@ -18,9 +18,9 @@ Device: Samsung Galaxy Watch 4 (SM-R870), bootloader `R870XXS2JZG3` (binary revi
 | Length of system sleep | normal: periods of up to 45 s between PMIC alarm wakeups (`s2mpw03-irq`). An open ADB connection from a computer wakes the SoC after 0 to 1 s every time (the computer's TCP ACKs on port 5555 raise the Wi-Fi host wake, `bcmsdh_sdmmc`), so measure sleep with `adb` disconnected |
 | Bluetooth, pairing with a phone (required for the first setup) | works |
 | Sensors (heart rate, GPS), Samsung Health | not checked |
-| Charge limit (`batt_full_capacity`, kernel patch `0008`) | built, not flashed or checked; the tested `boot.img` below has no `0008` |
+| Charge limit (`batt_full_capacity`, kernel patch `0008`) | works on the wireless pad: charging stops at the limit (`Not charging`, `batt_misc_event` `0x01000000`, current about 0 mA), resumes at the limit minus `batt_full_capacity_hyst` and stops again; values out of range are rejected; `100` ends the limit |
 
-Checked on 2026-11-23 with `boot.img` `a34f6774…`: C2 entry counts of both cores keep rising, a CPU1 hotplug cycle reads `CLUSTER0_CPU1_STATUS` 0 while the core is offline, and off the charger with the screen off and no ADB connection the watch slept 183 s of about 3 minutes in 8 suspend cycles, each with `MIF down`.
+Checked on 2026-11-23 with `boot.img` `a34f6774…`: C2 entry counts of both cores keep rising, a CPU1 hotplug cycle reads `CLUSTER0_CPU1_STATUS` 0 while the core is offline, and off the charger with the screen off and no ADB connection the watch slept 183 s of about 3 minutes in 8 suspend cycles, each with `MIF down`. The charge limit was checked the same day with a build of patches `0001` to `0008`, the boot splash with the `boot.img` listed below (boot, display, Wi-Fi, Magisk and ADB were checked with it as well; sleep and C2 were not measured again).
 
 ## Hashes
 
@@ -43,11 +43,10 @@ Outputs of `build.sh images`:
 | `dtbo.img` | `0175b41b121c3abd0ba72fbab625cb37e0ec93e5fe874b88102ebcf9c8662724` |
 | `vbmeta.img` | `c2aa2079e68ebe788e04602c482288090f1f3ca62c71cff51a024503c8857153` |
 | `vbmeta_system.img` | `8d1d1df7ddb62bacaa15ade994f23749fd520e64d20526e76a34c9dab62c323f` |
-| `Image` (kernel, `build.sh kernel`, patches `0001` to `0007`) | `d3c20d57dd33cbc7296e3f98b9de1d911491662a26663f35339a718e4e47d9de` |
-| `Image` with patch `0008` as well (not flashed) | `f0dcde9eaea6acbf9600ce84f71455395ac58b8ef73ee379618ac3bdd6b66b2a` |
-| `boot.img` | `a34f6774701c57d6a6a320f5646488f03455cdf03769aada513388aee87c89d0` |
+| `Image` (kernel, `build.sh kernel`, patches `0001` to `0009`) | `da0f284b0d0fdf523f9c152e409ba2beb999ef93ad479244d8fe25b977189df1` |
+| `boot.img` | `8038ee4d5bda666be25664a3c79dfe201a34d1db723f7a55650175cee2429ed7` |
 
-`dtbo`, `vbmeta`, `vbmeta_system` and `boot` are byte for byte the images that were flashed and booted. This `boot.img` is the one with Magisk 31.1 and the earlier overlay that opened ADB without keys; `boot.img` depends on the Magisk APK given to `build.sh magisk`. `build.sh` fixes all embedded build times (initramfs, `__TIME__` in the Wi-Fi drivers, the banner), so its output does not depend on when it runs.
+`dtbo`, `vbmeta`, `vbmeta_system` and `boot` are byte for byte the images that were flashed and booted. `boot.img` depends on the Magisk APK given to `build.sh magisk`: this one was built with a Magisk 31.1 build of our own (`31.1-wear`, APK SHA-256 `66fb758f1b4a378a78cac132236a3aca42a30f942cd5510e3ea231677b69eb5f`), whose patched image (`work/magisk_patched.img`) is `97fcd3948bc61703b2acbc0b8bd984cca08b8258c3aeca821dcf45ee2291357d`. `build.sh` fixes all embedded build times (initramfs, `__TIME__` in the Wi-Fi drivers, the banner), so its output does not depend on when it runs.
 
 ## Partition sizes
 
