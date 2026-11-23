@@ -20,7 +20,7 @@ Device: Samsung Galaxy Watch 4 (SM-R870), bootloader `R870XXS2JZG3` (binary revi
 | Sensors (heart rate, GPS), Samsung Health | not checked |
 | Charge limit (`batt_full_capacity`, kernel patch `0008`) | works on the wireless pad: charging stops at the limit (`Not charging`, `batt_misc_event` `0x01000000`, current about 0 mA), resumes at the limit minus `batt_full_capacity_hyst` and stops again; values out of range are rejected; `100` ends the limit |
 
-Checked on 2026-11-23 with `boot.img` `a34f6774…`: C2 entry counts of both cores keep rising, a CPU1 hotplug cycle reads `CLUSTER0_CPU1_STATUS` 0 while the core is offline, and off the charger with the screen off and no ADB connection the watch slept 183 s of about 3 minutes in 8 suspend cycles, each with `MIF down`. The charge limit was checked the same day with a build of patches `0001` to `0008`, the boot splash with the `boot.img` listed below (boot, display, Wi-Fi, Magisk and ADB were checked with it as well; sleep and C2 were not measured again).
+Checked on 2026-11-23 with `boot.img` `a34f6774…`: C2 entry counts of both cores keep rising, a CPU1 hotplug cycle reads `CLUSTER0_CPU1_STATUS` 0 while the core is offline, and off the charger with the screen off and no ADB connection the watch slept 183 s of about 3 minutes in 8 suspend cycles, each with `MIF down`. The charge limit was checked the same day with a build of patches `0001` to `0008`, the power symbol splash with `boot.img` `8038ee4d…` (patches `0001` to `0009` before the splash took an image), and the splash with a custom image with the locally built variant described below the hashes (boot, display, Wi-Fi, Magisk and ADB were checked with both; sleep and C2 were not measured again).
 
 ## Hashes
 
@@ -43,10 +43,12 @@ Outputs of `build.sh images`:
 | `dtbo.img` | `0175b41b121c3abd0ba72fbab625cb37e0ec93e5fe874b88102ebcf9c8662724` |
 | `vbmeta.img` | `c2aa2079e68ebe788e04602c482288090f1f3ca62c71cff51a024503c8857153` |
 | `vbmeta_system.img` | `8d1d1df7ddb62bacaa15ade994f23749fd520e64d20526e76a34c9dab62c323f` |
-| `Image` (kernel, `build.sh kernel`, patches `0001` to `0009`) | `da0f284b0d0fdf523f9c152e409ba2beb999ef93ad479244d8fe25b977189df1` |
-| `boot.img` | `8038ee4d5bda666be25664a3c79dfe201a34d1db723f7a55650175cee2429ed7` |
+| `Image` (kernel, `build.sh kernel` without `BOOT_SPLASH`, patches `0001` to `0009`) | `c2ff423d0511c1ac3907f053cbc7f807e121793d33fd40ee862dc1eddaca6e04` |
+| `boot.img` | `b2d1cf641a26daa5c3ae45ccf536ab638c3bb6e4c499874544c8223a73c62833` |
 
-`dtbo`, `vbmeta`, `vbmeta_system` and `boot` are byte for byte the images that were flashed and booted. `boot.img` depends on the Magisk APK given to `build.sh magisk`: this one was built with a Magisk 31.1 build of our own (`31.1-wear`, APK SHA-256 `66fb758f1b4a378a78cac132236a3aca42a30f942cd5510e3ea231677b69eb5f`), whose patched image (`work/magisk_patched.img`) is `97fcd3948bc61703b2acbc0b8bd984cca08b8258c3aeca821dcf45ee2291357d`. `build.sh` fixes all embedded build times (initramfs, `__TIME__` in the Wi-Fi drivers, the banner), so its output does not depend on when it runs.
+These are the outputs of the default build from this repository, with the power symbol as the boot splash. `dtbo`, `vbmeta` and `vbmeta_system` are byte for byte the images that were flashed and booted. `boot.img` depends on the Magisk APK given to `build.sh magisk`: this one was built with a Magisk 31.1 build of our own (`31.1-wear`, APK SHA-256 `56e3b8d1464536029f3c94f4dfe8851c27a8f245d0dcd2b3fba452755c52cdf8`), whose patched image (`work/magisk_patched.img`) is `fef81502b185f62dc654ac69661a29bda591b4a4ef9a4f65027127aa1016aae7`.
+
+The watch does not run this default `boot.img` byte for byte. It runs a variant built locally from the same sources and the same Magisk image, with a custom splash image given in `BOOT_SPLASH` (an image that is not part of this repository): `Image` `69d83d92489745face4f9f81b33084d2c3b9b2c3c49555d1c5324278eadba950`, `boot.img` `4698c41246f271e10e5a7a406254008b4fc4643fb5924c3497f40669bb6b25f8`. It differs from the default build only in the kernel, in the compressed image and the code that shows it; the ramdisk, the device tree and the other images are the same. `build.sh` fixes all embedded build times (initramfs, `__TIME__` in the Wi-Fi drivers, the banner), so its output does not depend on when it runs.
 
 ## Partition sizes
 
