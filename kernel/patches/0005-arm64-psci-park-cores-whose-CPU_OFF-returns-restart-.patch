@@ -1,0 +1,133 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jakub Mendyka <jkmendyka@gmail.com>
+Date: Sun, 22 Nov 2026 19:30:56 +0100
+Subject: [PATCH] arm64: psci: park cores whose CPU_OFF returns, restart them
+ on CPU up
+
+With the rev2 bootloader PSCI CPU_OFF of the second core returns
+PSCI_SUCCESS instead of powering it down; AFFINITY_INFO reports the core
+as off at the same time and a later CPU_ON does not start it. cpu_die()
+then hit BUG().
+
+When CPU_OFF returns success, the core now parks in WFI (a core in WFE
+kept the SoC from entering system sleep). cpu_boot releases a parked
+core with an IPI; it restarts through secondary_entry with the MMU off
+(cpu_soft_restart, the kexec path), like a core started by CPU_ON. If
+the parked core does not answer within 10 ms (it lost power, for example
+in system suspend), CPU_ON is used. cpu-reset.o is now built with
+CONFIG_HOTPLUG_CPU as well.
+---
+ arch/arm64/kernel/Makefile |  2 ++
+ arch/arm64/kernel/psci.c   | 68 ++++++++++++++++++++++++++++++++++++--
+ 2 files changed, 68 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/kernel/Makefile b/arch/arm64/kernel/Makefile
+index 4b92f69fd..a7c49c755 100755
+--- a/arch/arm64/kernel/Makefile
++++ b/arch/arm64/kernel/Makefile
+@@ -57,6 +57,8 @@ arm64-obj-$(CONFIG_RANDOMIZE_BASE)	+= kaslr.o
+ arm64-obj-$(CONFIG_HIBERNATION)		+= hibernate.o hibernate-asm.o
+ arm64-obj-$(CONFIG_KEXEC)		+= machine_kexec.o relocate_kernel.o	\
+ 					   cpu-reset.o
++# psci.c restarts parked cores through cpu_soft_restart()
++arm64-obj-$(CONFIG_HOTPLUG_CPU)		+= cpu-reset.o
+ arm64-obj-$(CONFIG_ARM64_RELOC_TEST)	+= arm64-reloc-test.o
+ arm64-reloc-test-y := reloc_test_core.o reloc_test_syms.o
+ arm64-obj-$(CONFIG_CRASH_DUMP)		+= crash_dump.o
+diff --git a/arch/arm64/kernel/psci.c b/arch/arm64/kernel/psci.c
+index 73d5ac368..026a79334 100755
+--- a/arch/arm64/kernel/psci.c
++++ b/arch/arm64/kernel/psci.c
+@@ -27,8 +27,11 @@
+ #include <asm/compiler.h>
+ #include <asm/cpu_ops.h>
+ #include <asm/errno.h>
++#include <asm/mmu_context.h>
+ #include <asm/smp_plat.h>
+ 
++#include "cpu-reset.h"
++
+ static int __init cpu_psci_cpu_init(unsigned int cpu)
+ {
+ 	return 0;
+@@ -44,10 +47,59 @@ static int __init cpu_psci_cpu_prepare(unsigned int cpu)
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_HOTPLUG_CPU
++/*
++ * With bootloader rev2 (R870XXS2JZG3) PSCI CPU_OFF returns PSCI_SUCCESS
++ * instead of powering the core down, while AFFINITY_INFO already reports
++ * it as off; a later CPU_ON then does not start it either. Such a core
++ * parks in cpu_psci_cpu_die() and is released from here; it then restarts
++ * through secondary_entry with the MMU off, like a core started by CPU_ON.
++ * If a parked core does not answer (it lost power, e.g. in system
++ * suspend), CPU_ON is used.
++ */
++static unsigned long psci_parked[NR_CPUS];
++static unsigned long psci_release[NR_CPUS];
++
++static bool cpu_psci_release_parked(unsigned int cpu)
++{
++	int i;
++
++	if (!READ_ONCE(psci_parked[cpu]))
++		return false;
++
++	WRITE_ONCE(psci_release[cpu], 1);
++	dsb(sy);
++	/* a pending interrupt ends WFI even with interrupts masked */
++	smp_send_reschedule(cpu);
++
++	/* the parked core clears psci_parked[] before it restarts */
++	for (i = 0; i < 1000; i++) {
++		if (!READ_ONCE(psci_parked[cpu]))
++			return true;
++		udelay(10);
++	}
++
++	WRITE_ONCE(psci_release[cpu], 0);
++	WRITE_ONCE(psci_parked[cpu], 0);
++	pr_info("CPU%d: parked core did not answer, using CPU_ON\n", cpu);
++	return false;
++}
++#else
++static bool cpu_psci_release_parked(unsigned int cpu)
++{
++	return false;
++}
++#endif
++
+ static int cpu_psci_cpu_boot(unsigned int cpu)
+ {
+-	int err = psci_ops.cpu_on(cpu_logical_map(cpu),
+-				  __pa_function(secondary_entry));
++	int err;
++
++	if (cpu_psci_release_parked(cpu))
++		return 0;
++
++	err = psci_ops.cpu_on(cpu_logical_map(cpu),
++			      __pa_function(secondary_entry));
+ 	if (err)
+ 		pr_err("failed to boot CPU%d (%d)\n", cpu, err);
+ 
+@@ -80,6 +132,18 @@ static void cpu_psci_cpu_die(unsigned int cpu)
+ 
+ 	ret = psci_ops.cpu_off(state);
+ 
++	/* see cpu_psci_release_parked() */
++	if (ret == 0) {
++		WRITE_ONCE(psci_parked[cpu], 1);
++		dsb(sy);
++		while (!READ_ONCE(psci_release[cpu]))
++			wfi();
++		WRITE_ONCE(psci_release[cpu], 0);
++		WRITE_ONCE(psci_parked[cpu], 0);
++		dsb(sy);
++		cpu_soft_restart(__pa_function(secondary_entry), 0, 0, 0);
++	}
++
+ 	pr_crit("unable to power off CPU%u (%d)\n", cpu, ret);
+ }
+ 

@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jakub Mendyka <jkmendyka@gmail.com>
+Date: Sun, 22 Nov 2026 19:09:04 +0100
+Subject: [PATCH] exynos-cpupm: use the fast monotonic clock for the sleep
+ length
+
+get_sleep_length() runs in the idle path. During suspend-to-idle the
+last CPU freezes the tick and suspends timekeeping, and the ktime_get()
+call then warned on every idle entry ("timekeeping.c:753 ktime_get" from
+cpuidle_enter_s2idle). ktime_get_mono_fast_ns() is safe there.
+---
+ drivers/soc/samsung/exynos-cpupm.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/soc/samsung/exynos-cpupm.c b/drivers/soc/samsung/exynos-cpupm.c
+index 1acd3666c..21fc7a908 100755
+--- a/drivers/soc/samsung/exynos-cpupm.c
++++ b/drivers/soc/samsung/exynos-cpupm.c
+@@ -409,10 +409,17 @@ void enable_power_mode(int cpu, int type)
+ 	spin_unlock(&cpupm_lock);
+ }
+ 
+-/* get sleep length of given cpu from tickless framework */
++/*
++ * get sleep length of given cpu from tickless framework
++ *
++ * This runs in the idle path, including suspend-to-idle, where
++ * timekeeping is suspended and ktime_get() warns on every call. The fast
++ * monotonic clock is safe there.
++ */
+ static s64 get_sleep_length(int cpu)
+ {
+-	return ktime_to_us(ktime_sub(*(get_next_event_cpu(cpu)), ktime_get()));
++	return ktime_to_us(ktime_sub(*(get_next_event_cpu(cpu)),
++				     ns_to_ktime(ktime_get_mono_fast_ns())));
+ }
+ 
+ static int cpus_busy(int target_residency, const struct cpumask *cpus)
