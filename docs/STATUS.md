@@ -18,6 +18,7 @@ Device: Samsung Galaxy Watch 4 (SM-R870), bootloader `R870XXS2JZG3` (binary revi
 | Length of system sleep | normal: periods of up to 45 s between PMIC alarm wakeups (`s2mpw03-irq`). An open ADB connection from a computer wakes the SoC after 0 to 1 s every time (the computer's TCP ACKs on port 5555 raise the Wi-Fi host wake, `bcmsdh_sdmmc`), so measure sleep with `adb` disconnected |
 | Bluetooth, pairing with a phone (required for the first setup) | works |
 | Sensors (heart rate, GPS), Samsung Health | not checked |
+| Charge limit (`batt_full_capacity`, kernel patch `0008`) | built, not flashed or checked; the tested `boot.img` below has no `0008` |
 
 Checked on 2026-11-23 with `boot.img` `a34f6774…`: C2 entry counts of both cores keep rising, a CPU1 hotplug cycle reads `CLUSTER0_CPU1_STATUS` 0 while the core is offline, and off the charger with the screen off and no ADB connection the watch slept 183 s of about 3 minutes in 8 suspend cycles, each with `MIF down`.
 
@@ -42,7 +43,8 @@ Outputs of `build.sh images`:
 | `dtbo.img` | `0175b41b121c3abd0ba72fbab625cb37e0ec93e5fe874b88102ebcf9c8662724` |
 | `vbmeta.img` | `c2aa2079e68ebe788e04602c482288090f1f3ca62c71cff51a024503c8857153` |
 | `vbmeta_system.img` | `8d1d1df7ddb62bacaa15ade994f23749fd520e64d20526e76a34c9dab62c323f` |
-| `Image` (kernel, `build.sh kernel`) | `d3c20d57dd33cbc7296e3f98b9de1d911491662a26663f35339a718e4e47d9de` |
+| `Image` (kernel, `build.sh kernel`, patches `0001` to `0007`) | `d3c20d57dd33cbc7296e3f98b9de1d911491662a26663f35339a718e4e47d9de` |
+| `Image` with patch `0008` as well (not flashed) | `f0dcde9eaea6acbf9600ce84f71455395ac58b8ef73ee379618ac3bdd6b66b2a` |
 | `boot.img` | `a34f6774701c57d6a6a320f5646488f03455cdf03769aada513388aee87c89d0` |
 
 `dtbo`, `vbmeta`, `vbmeta_system` and `boot` are byte for byte the images that were flashed and booted. This `boot.img` is the one with Magisk 31.1 and the earlier overlay that opened ADB without keys; `boot.img` depends on the Magisk APK given to `build.sh magisk`. `build.sh` fixes all embedded build times (initramfs, `__TIME__` in the Wi-Fi drivers, the banner), so its output does not depend on when it runs.

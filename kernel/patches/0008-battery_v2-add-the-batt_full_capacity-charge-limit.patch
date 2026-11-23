@@ -1,0 +1,256 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jakub Mendyka <jkmendyka@gmail.com>
+Date: Mon, 23 Nov 2026 20:05:47 +0100
+Subject: [PATCH] battery_v2: add the batt_full_capacity charge limit
+
+Later Samsung battery drivers have a charge limit in
+/sys/class/power_supply/battery/batt_full_capacity; this 4.19 driver
+does not. Add it under the same name. With a value between 50 and 99,
+the monitor work stops charging when the capacity reaches the limit and
+resumes at limit - 2, the recharge capacity of the later drivers. 0 and
+100 turn the limit off, 100 is the default, so nothing changes until
+the node is written. Values from 1 to 49, which the later drivers take,
+are rejected. batt_full_capacity_hyst (1 to 20, default 2) sets the
+distance to the recharge capacity.
+
+Charging is stopped with a chgen vote for charger off and, on a
+wireless pad, with power hold mode, as at the end of a normal full
+charge. The status is not charging and batt_misc_event has
+BATT_MISC_EVENT_FULL_CAPACITY (0x01000000) set, both as in the later
+drivers. A thermal zone change no longer reports charging while the
+limit holds. Unplugging, slate mode, or turning the limit off releases
+the votes.
+---
+ drivers/battery_v2/include/sec_battery.h    |  5 ++
+ drivers/battery_v2/include/sec_vote_event.h |  1 +
+ drivers/battery_v2/sec_battery.c            | 86 +++++++++++++++++++++
+ drivers/battery_v2/sec_battery_thermal.c    |  4 +-
+ drivers/battery_v2/sysfs_event.c            | 33 ++++++++
+ 5 files changed, 128 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/battery_v2/include/sec_battery.h b/drivers/battery_v2/include/sec_battery.h
+index 5ab7ecf..014c0e8 100755
+--- a/drivers/battery_v2/include/sec_battery.h
++++ b/drivers/battery_v2/include/sec_battery.h
+@@ -122,6 +122,7 @@
+ #define BATT_MISC_EVENT_ABNORMAL_PAD			0x00200000
+ #define BATT_MISC_EVENT_WIRELESS_MISALIGN		0x00400000
+ #define BATT_MISC_EVENT_WIRELESS_INCOMPATIBLE	0x00800000
++#define BATT_MISC_EVENT_FULL_CAPACITY		0x01000000
+ 
+ #define BATTERY_HEALTH_SHIFT	16
+ enum misc_battery_health {
+@@ -310,6 +311,10 @@ struct sec_battery_info {
+ 	bool store_mode;
+ 	bool low_current_tct;
+ 
++	/* charge limit: stop at batt_full_capacity %, resume at limit - hyst */
++	int batt_full_capacity;
++	int batt_full_capacity_hyst;
++
+ 	int stability_test;
+ 	int eng_not_full_status;
+ 
+diff --git a/drivers/battery_v2/include/sec_vote_event.h b/drivers/battery_v2/include/sec_vote_event.h
+index 1648adc..3f8d0c1 100755
+--- a/drivers/battery_v2/include/sec_vote_event.h
++++ b/drivers/battery_v2/include/sec_vote_event.h
+@@ -55,6 +55,7 @@
+ 	GENERATE(VOTER_WPC_MODE),	\
+ 	GENERATE(VOTER_WPC_AUTH),	\
+ 	GENERATE(VOTER_WPC_RX_PWR_CHK),	\
++	GENERATE(VOTER_FULL_CAPACITY),	\
+ 	GENERATE(VOTER_MAX)	\
+ }
+ 
+diff --git a/drivers/battery_v2/sec_battery.c b/drivers/battery_v2/sec_battery.c
+index 870840b..a3f7112 100755
+--- a/drivers/battery_v2/sec_battery.c
++++ b/drivers/battery_v2/sec_battery.c
+@@ -2066,6 +2066,87 @@ static void sec_bat_check_store_mode(struct sec_battery_info *battery)
+ 	}
+ }
+ 
++/*
++ * Charge limit (batt_full_capacity), after the function of the same name in
++ * later Samsung battery drivers. With a limit between 1 and 99, charging
++ * stops when the capacity reaches the limit and resumes when it has fallen
++ * to limit - batt_full_capacity_hyst. 0 and 100 turn the limit off.
++ * Charging is stopped by a chgen vote for charger off and, on a wireless
++ * pad, by power hold mode, as at the end of a normal full charge; the
++ * watch then runs from the battery until charging resumes.
++ */
++static void sec_bat_recov_full_capacity(struct sec_battery_info *battery)
++{
++	sec_bat_set_misc_event(battery, 0, BATT_MISC_EVENT_FULL_CAPACITY);
++	sec_vote(battery->chgen_vote, VOTER_FULL_CAPACITY, false, 0);
++	sec_votef(VN_WPC_PHM, VOTER_FULL_CAPACITY, false, WPC_PHM_OFF);
++
++	if (battery->status == POWER_SUPPLY_STATUS_NOT_CHARGING &&
++		battery->health == POWER_SUPPLY_HEALTH_GOOD) {
++		if (battery->charging_mode == SEC_BATTERY_CHARGING_NONE)
++			battery->charging_mode = SEC_BATTERY_CHARGING_1ST;
++		sec_bat_set_charging_status(battery, POWER_SUPPLY_STATUS_CHARGING);
++	}
++}
++
++static void sec_bat_check_full_capacity(struct sec_battery_info *battery)
++{
++	int limit = battery->batt_full_capacity;
++	int rechg_capacity = limit - battery->batt_full_capacity_hyst;
++	bool limited = battery->misc_event & BATT_MISC_EVENT_FULL_CAPACITY;
++
++	if (limit <= 0 || limit >= 100 ||
++		battery->status == POWER_SUPPLY_STATUS_DISCHARGING ||
++		is_nocharge_type(battery->cable_type) ||
++		is_slate_mode(battery)) {
++		if (limited) {
++			pr_info("%s: limit off (%d), status(%s)\n", __func__,
++				limit, sb_get_bst_str(battery->status));
++			sec_bat_recov_full_capacity(battery);
++		}
++		return;
++	}
++
++	if (limited) {
++		if (battery->capacity <= rechg_capacity) {
++			pr_info("%s: start re-charging (%d <= %d)\n", __func__,
++				battery->capacity, rechg_capacity);
++			sec_bat_recov_full_capacity(battery);
++		} else if (battery->status != POWER_SUPPLY_STATUS_NOT_CHARGING) {
++			/* another path reported charging while the limit holds */
++			sec_bat_set_charging_status(battery,
++				POWER_SUPPLY_STATUS_NOT_CHARGING);
++		}
++		return;
++	}
++
++	if (battery->capacity < limit ||
++		(battery->status != POWER_SUPPLY_STATUS_CHARGING &&
++		battery->status != POWER_SUPPLY_STATUS_FULL))
++		return;
++
++	pr_info("%s: stop charging (%d >= %d)\n", __func__,
++		battery->capacity, limit);
++	sec_bat_set_misc_event(battery, BATT_MISC_EVENT_FULL_CAPACITY,
++		BATT_MISC_EVENT_FULL_CAPACITY);
++	if (is_wireless_type(battery->cable_type))
++		sec_votef(VN_WPC_PHM, VOTER_FULL_CAPACITY, true, WPC_PHM_ON);
++	sec_vote(battery->chgen_vote, VOTER_FULL_CAPACITY, true,
++		SEC_BAT_CHG_MODE_CHARGING_OFF);
++
++	/*
++	 * Coming from a finished full charge, hand over from its votes, so
++	 * that charging resumes at the recharge capacity and not only when
++	 * the full charge recharge condition is met.
++	 */
++	sec_vote(battery->topoff_vote, VOTER_FULL_CHARGE, false, 0);
++	sec_vote(battery->chgen_vote, VOTER_FULL_CHARGE, false, 0);
++	sec_votef(VN_WPC_PHM, VOTER_FULL_CHARGE, false, WPC_PHM_OFF);
++	battery->is_recharging = false;
++
++	sec_bat_set_charging_status(battery, POWER_SUPPLY_STATUS_NOT_CHARGING);
++}
++
+ static void sec_bat_monitor_work(
+ 				struct work_struct *work)
+ {
+@@ -2134,6 +2215,9 @@ static void sec_bat_monitor_work(
+ 	/* time to full check */
+ 	sec_bat_calc_time_to_full(battery);
+ 
++	/* charge limit */
++	sec_bat_check_full_capacity(battery);
++
+ 	/* 0. test mode */
+ 	if (battery->test_mode) {
+ 		dev_err(battery->dev, "%s: Test Mode\n", __func__);
+@@ -4164,6 +4248,8 @@ static int sec_battery_probe(struct platform_device *pdev)
+ 	battery->test_mode = 0;
+ 	battery->factory_mode = false;
+ 	battery->store_mode = false;
++	battery->batt_full_capacity = 100;
++	battery->batt_full_capacity_hyst = 2;
+ 
+ 	battery->safety_timer_set = true;
+ 	battery->stop_timer = false;
+diff --git a/drivers/battery_v2/sec_battery_thermal.c b/drivers/battery_v2/sec_battery_thermal.c
+index e9b6b96..a7c3821 100755
+--- a/drivers/battery_v2/sec_battery_thermal.c
++++ b/drivers/battery_v2/sec_battery_thermal.c
+@@ -363,7 +363,9 @@ void sec_bat_thermal_check(struct sec_battery_info *battery)
+ 			battery->health = POWER_SUPPLY_HEALTH_GOOD;
+ 			break;
+ 		}
+-		if ((battery->thermal_zone >= BAT_THERMAL_COOL3) && (battery->thermal_zone <= BAT_THERMAL_WARM)) {
++		/* the charge limit keeps the status at not charging */
++		if ((battery->thermal_zone >= BAT_THERMAL_COOL3) && (battery->thermal_zone <= BAT_THERMAL_WARM) &&
++			!(battery->misc_event & BATT_MISC_EVENT_FULL_CAPACITY)) {
+ #if defined(CONFIG_ENABLE_FULL_BY_SOC)
+ 			if ((battery->capacity >= 100) || (battery->status == POWER_SUPPLY_STATUS_FULL))
+ 				sec_bat_set_charging_status(battery, POWER_SUPPLY_STATUS_FULL);
+diff --git a/drivers/battery_v2/sysfs_event.c b/drivers/battery_v2/sysfs_event.c
+index 33c5187..8d72422 100755
+--- a/drivers/battery_v2/sysfs_event.c
++++ b/drivers/battery_v2/sysfs_event.c
+@@ -83,6 +83,8 @@ static struct device_attribute sysfs_device_attrs[] = {
+ 	SYSFS_EVENT_ATTR(batt_misc_event),
+ 	SYSFS_EVENT_ATTR(batt_current_event),
+ 	SYSFS_EVENT_ATTR(batt_misc_test),
++	SYSFS_EVENT_ATTR(batt_full_capacity),
++	SYSFS_EVENT_ATTR(batt_full_capacity_hyst),
+ };
+ 
+ enum {
+@@ -120,6 +122,8 @@ enum {
+ 	BATT_MISC_EVENT,
+ 	BATT_CURRENT_EVENT,
+ 	BATT_MISC_TEST,
++	BATT_FULL_CAPACITY,
++	BATT_FULL_CAPACITY_HYST,
+ };
+ 
+ enum battery_misc_test {
+@@ -201,6 +205,14 @@ static ssize_t sysfs_event_show_attrs(struct device *dev,
+ 		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
+ 			       battery->disable_temp_check);
+ 		break;
++	case BATT_FULL_CAPACITY:
++		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
++			       battery->batt_full_capacity);
++		break;
++	case BATT_FULL_CAPACITY_HYST:
++		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
++			       battery->batt_full_capacity_hyst);
++		break;
+ 	default:
+ 		return -EINVAL;
+ 	}
+@@ -402,6 +414,27 @@ static ssize_t sysfs_event_store_attrs(struct device *dev,
+ 		}
+ 	}
+ 		break;
++	case BATT_FULL_CAPACITY:
++		/* 0 and 100 turn the limit off; later drivers also accept a
++		 * word after the number, which is ignored here */
++		if (sscanf(buf, "%10d", &x) != 1 ||
++			x < 0 || x > 100 || (x > 0 && x < 50))
++			return -EINVAL;
++		pr_info("%s: batt_full_capacity %d -> %d\n", __func__,
++			battery->batt_full_capacity, x);
++		battery->batt_full_capacity = x;
++		__pm_stay_awake(battery->monitor_ws);
++		queue_delayed_work(battery->monitor_wqueue, &battery->monitor_work, 0);
++		break;
++	case BATT_FULL_CAPACITY_HYST:
++		if (sscanf(buf, "%10d", &x) != 1 || x < 1 || x > 20)
++			return -EINVAL;
++		pr_info("%s: batt_full_capacity_hyst %d -> %d\n", __func__,
++			battery->batt_full_capacity_hyst, x);
++		battery->batt_full_capacity_hyst = x;
++		__pm_stay_awake(battery->monitor_ws);
++		queue_delayed_work(battery->monitor_wqueue, &battery->monitor_work, 0);
++		break;
+ 	default:
+ 		return -EINVAL;
+ 	}

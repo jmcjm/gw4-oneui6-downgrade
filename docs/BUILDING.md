@@ -45,7 +45,31 @@ Compare the hashes from the watch with `SHA256SUMS` before going on. Pulling `su
 
 `source` downloads the three packages listed in `kernel/sources.txt` from opensource.samsung.com and checks their SHA-256. It unpacks them in order (base `R860XXU1IXK1`, then the SM-R870 device tree and `exynos5515-freshbl_defconfig`, then the `R870XXU1IYI1` kernel update) and applies the patches.
 
-`kernel` builds `exynos5515-freshbl_defconfig` with the options in `kernel/nouh.config` disabled. The host programs of the 4.19 tree do not build with current OpenSSL and without libyaml, hence the container. The banner values (`KBUILD_BUILD_*` in `build.sh`) are those of the tested build, so the result is byte for byte the tested kernel; its hash is in `STATUS.md`.
+`kernel` builds `exynos5515-freshbl_defconfig` with the options in `kernel/nouh.config` disabled. The host programs of the 4.19 tree do not build with current OpenSSL and without libyaml, hence the container. The banner values (`KBUILD_BUILD_*` in `build.sh`) are those of the tested build, so with patches `0001` to `0007` the result is byte for byte the tested kernel; its hash is in `STATUS.md`. Patch `0008` (the charge limit below) changes the image; `STATUS.md` has the hash of the build with it. To build the tested kernel, move `0008` out of `kernel/patches/` before `./build.sh source`.
+
+### Charge limit
+
+Patch `0008` adds the charge limit of later Samsung battery drivers to `/sys/class/power_supply/battery/`, under the same name:
+
+| Node | Values | Default |
+|---|---|---|
+| `batt_full_capacity` | `50` to `99`: stop charging at this capacity; `0` or `100`: no limit | `100` |
+| `batt_full_capacity_hyst` | `1` to `20`: resume charging when the capacity has fallen by this much below the limit | `2` |
+
+Both are written by root at runtime and are not kept across reboots; other values are rejected with `EINVAL`. The driver checks the limit in its own monitor work, so no process has to run for it. At the limit it votes the charger off and puts the wireless receiver in power hold mode, as at the end of a normal full charge, so the watch runs from the battery until charging resumes; `status` reads `Not charging` and `batt_misc_event` has bit `0x01000000` set. Lifting the watch off the pad or writing `100` ends the limit at once.
+
+Test after flashing a boot image built with it, in a root shell (`adb shell`, then `su`), with the watch charging at between 50 and 99 %:
+
+```bash
+cd /sys/class/power_supply/battery
+cat batt_full_capacity batt_full_capacity_hyst   # 100 2: no limit
+cat capacity > batt_full_capacity                # limit at the current capacity
+cat status batt_misc_event                       # Not charging; 16777216 (0x01000000) is set
+dmesg | grep sec_bat_check_full_capacity         # stop charging (NN >= NN)
+echo 100 > batt_full_capacity                    # no limit again: status back to Charging
+```
+
+With a limit above the current capacity, watch `capacity` and `status` while it charges: `Not charging` at the limit, `Charging` again at limit minus `batt_full_capacity_hyst`.
 
 ## 4. Firmware, trustlets, Magisk boot image
 

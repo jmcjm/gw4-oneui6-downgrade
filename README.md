@@ -21,7 +21,7 @@ Samsung does not allow this. The One UI 8 update raises the bootloader binary re
 | EL3 powers no core down (C2 fails, `CPU_OFF` returns) until the kernel sends `SMC_CMD_CPUPM_ENABLE`, which 4.19 never does | kernel patches: the 5.15 exynos-cpupm driver ported to 4.19, the core `INT_EN` writes dropped; device tree: the rev2 `exynos-cpupm` node |
 | With real MPIDRs in the device tree, the 4.19 `sleep.S` gives both cores the same saved-context slot, and both cores in C2 hang the system | kernel patch: hash the MPIDR as it is, as mainline does |
 
-The kernel is Samsung's 4.19 source for `R870XXU1IYI1` with seven patches, built without the Samsung hypervisor clients (UH, RKP, KDP): the KDP interface of the rev2 hypervisor changed, and its RKP expects the 5.15 kernel memory layout. Each problem, with the log lines that showed it, is described in `docs/LESSONS.md`.
+The kernel is Samsung's 4.19 source for `R870XXU1IYI1` with seven patches for the rev2 bootloader and an eighth that adds a charge limit (`batt_full_capacity`, off by default), built without the Samsung hypervisor clients (UH, RKP, KDP): the KDP interface of the rev2 hypervisor changed, and its RKP expects the 5.15 kernel memory layout. Each problem, with the log lines that showed it, is described in `docs/LESSONS.md`.
 
 The boot image does not open ADB over TCP. For ADB on a fixed port, with key authentication, use the `adb-wifi-keep` module from [gw4-magisk-modules](https://github.com/jmcjm/gw4-magisk-modules): it keeps Wi-Fi on and adbd on TCP 5555 after every boot and authorizes the keys it ships.
 
@@ -54,7 +54,7 @@ Then flash from the Wi-Fi recovery with `scripts/flash-chunks.sh`. Backup, the M
 |---|---|
 | `build.sh` | All build steps |
 | `kernel/sources.txt` | Samsung source packages (opensource.samsung.com ids and SHA-256) |
-| `kernel/patches/` | The seven kernel patches |
+| `kernel/patches/` | The kernel patches: `0001` to `0007` for bootloader rev2, `0008` the charge limit |
 | `kernel/nouh.config` | Options disabled in `exynos5515-freshbl_defconfig` |
 | `overlay/` | Magisk `overlay.d` scripts and the expected trustlet hashes |
 | `scripts/` | Download from opensource.samsung.com, signature stripping, device tree patch, chunked flashing |
