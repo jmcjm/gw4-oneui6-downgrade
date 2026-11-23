@@ -1,0 +1,9 @@
+# SurfaceFlinger asks init to start the boot animation from its own init
+# (ctl.start), but init handles that request only after 'class_start main'
+# of the nonencrypted trigger, which takes over 2 s, and bootanimation then
+# needs about 4 s before its first frame. Starting it right after
+# 'class_start core' (which starts SurfaceFlinger) overlaps both;
+# bootanimation waits for SurfaceFlinger by itself, and the later
+# ctl.start is a no-op for a running service.
+on boot
+    start bootanim
