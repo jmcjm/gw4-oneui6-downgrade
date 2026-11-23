@@ -33,12 +33,29 @@ probe into the same SysMMU (decon_map_ion_handle() on the dsim device,
 the owner of 13820000.sysmmu). The first HWC frame programs every
 window again.
 
+An image can replace the power symbol: if decon_boot_splash_image.h
+exists (written by build.sh from a raw RGB565 file, see BOOT_SPLASH), its
+zlib-compressed pixels are inflated into the framebuffer and the window
+is set to RGB565. A header with the wrong size or data falls back to the
+power symbol.
+
 The option defaults to y; adding EXYNOS_DECON_BOOT_SPLASH to
 kernel/nouh.config turns it off.
 ---
 --- a/drivers/video/fbdev/exynos/dpu30/decon_core.c
 +++ b/drivers/video/fbdev/exynos/dpu30/decon_core.c
-@@ -3585,6 +3585,46 @@
+@@ -46,6 +46,10 @@
+ #include "../../../../misc/tui/stui_hal.h"
+ #include "../../../../misc/tui/stui_core.h"
+ #endif
++#if IS_ENABLED(CONFIG_EXYNOS_DECON_BOOT_SPLASH)
++#include <linux/vmalloc.h>
++#include <linux/zlib.h>
++#endif
+ 
+ #if defined(CONFIG_SOC_S5E5515) && defined(CONFIG_ARM_EXYNOS_DEVFREQ)
+ #include <dt-bindings/soc/samsung/s5e5515-devfreq.h>
+@@ -3585,6 +3589,99 @@
  		framebuffer_release(win->fbinfo);
  }
  
@@ -80,22 +97,80 @@ kernel/nouh.config turns it off.
 +		}
 +	}
 +}
++
++/*
++ * An optional splash image replaces the power symbol: build.sh writes
++ * decon_boot_splash_image.h from a raw RGB565 file (BOOT_SPLASH), with
++ * DECON_SPLASH_IMAGE_W, DECON_SPLASH_IMAGE_H and the zlib-compressed
++ * pixels in decon_splash_image_z[]. Without the header, or if it does
++ * not decompress to exactly the panel size, the power symbol is drawn.
++ */
++#if __has_include("decon_boot_splash_image.h")
++#include "decon_boot_splash_image.h"
++#define DECON_SPLASH_HAVE_IMAGE
++#endif
++
++/* the framebuffer holds the RGB565 splash image instead of BGRA */
++static bool decon_splash_rgb565;
++
++static bool decon_boot_splash_image(void *vaddr, int w, int h)
++{
++#ifdef DECON_SPLASH_HAVE_IMAGE
++	size_t len = (size_t)w * h * 2;
++	struct z_stream_s s = { 0 };
++	void *buf;
++	int ret = Z_DATA_ERROR;
++
++	if (w != DECON_SPLASH_IMAGE_W || h != DECON_SPLASH_IMAGE_H) {
++		decon_warn("boot splash image is %dx%d, panel %dx%d\n",
++				DECON_SPLASH_IMAGE_W, DECON_SPLASH_IMAGE_H, w, h);
++		return false;
++	}
++	buf = vmalloc(len);
++	s.workspace = vmalloc(zlib_inflate_workspacesize());
++	if (buf && s.workspace) {
++		s.next_in = decon_splash_image_z;
++		s.avail_in = sizeof(decon_splash_image_z);
++		s.next_out = buf;
++		s.avail_out = len;
++		if (zlib_inflateInit(&s) == Z_OK) {
++			ret = zlib_inflate(&s, Z_FINISH);
++			zlib_inflateEnd(&s);
++		}
++	}
++	/* inflate into normal memory, then one copy into the framebuffer */
++	if (ret == Z_STREAM_END && s.total_out == len)
++		memcpy(vaddr, buf, len);
++	else
++		decon_warn("boot splash image does not decompress (%d)\n", ret);
++	vfree(s.workspace);
++	vfree(buf);
++	return ret == Z_STREAM_END && s.total_out == len;
++#else
++	return false;
++#endif
++}
 +#endif
 +
  static int decon_fb_alloc_memory(struct decon_device *decon, struct decon_win *win)
  {
  	struct exynos_panel_info *lcd_info = decon->lcd_info;
-@@ -3637,6 +3677,9 @@
+@@ -3637,6 +3734,14 @@
  			memset(vaddr + i + 3, 0, 1);
  		}
  	}
 +#if IS_ENABLED(CONFIG_EXYNOS_DECON_BOOT_SPLASH)
-+	decon_boot_splash_draw(vaddr, lcd_info->xres, lcd_info->yres);
++	decon_splash_rgb565 = decon_boot_splash_image(vaddr, lcd_info->xres,
++			lcd_info->yres);
++	if (!decon_splash_rgb565)
++		decon_boot_splash_draw(vaddr, lcd_info->xres, lcd_info->yres);
++	decon_info("boot splash: %s\n",
++			decon_splash_rgb565 ? "image" : "power symbol");
 +#endif
  
  	fbi->screen_base = vaddr;
  
-@@ -4229,9 +4272,26 @@
+@@ -4229,9 +4334,26 @@
  					decon->id, connected ? "connected" : "detached",
  					decon_get_bypass_cnt_global(decon->id));
  		}
@@ -122,7 +197,18 @@ kernel/nouh.config turns it off.
  	memset(&win_regs, 0, sizeof(struct decon_window_regs));
  	win_regs.wincon = wincon(decon->dt.dft_win);
  	win_regs.start_pos = win_start_pos(0, 0);
-@@ -4280,6 +4340,24 @@
+@@ -4256,6 +4378,10 @@
+ 	memset(&config, 0, sizeof(struct decon_win_config));
+ 	config.dpp_parm.addr[0] = fbinfo->fix.smem_start;
+ 	config.format = DECON_PIXEL_FORMAT_BGRA_8888;
++#if IS_ENABLED(CONFIG_EXYNOS_DECON_BOOT_SPLASH)
++	if (decon_splash_rgb565)
++		config.format = DECON_PIXEL_FORMAT_RGB_565;
++#endif
+ 	config.src.w = fbinfo->var.xres;
+ 	config.src.h = fbinfo->var.yres;
+ 	config.src.f_w = fbinfo->var.xres;
+@@ -4280,6 +4406,24 @@
  	
  	decon_reg_set_window_control(decon->id, decon->dt.dft_win,
  			&win_regs, is_colormap);
@@ -149,7 +235,7 @@ kernel/nouh.config turns it off.
  	decon_to_psr_info(decon, &psr);
 --- a/drivers/video/fbdev/exynos/dpu30/Kconfig
 +++ b/drivers/video/fbdev/exynos/dpu30/Kconfig
-@@ -151,6 +151,16 @@
+@@ -151,6 +151,18 @@
          bool "Support ystrace for DPU Regression Test"
          depends on EXYNOS_DPU30
          default n
@@ -162,7 +248,9 @@ kernel/nouh.config turns it off.
 +	  Bootloader rev2 (R870XXS2JZG3) hands the panel over in sleep-in
 +	  without its logo, so the screen stays black until the first frame
 +	  of SurfaceFlinger. With this option decon draws a power symbol into
-+	  its framebuffer at probe and sends it to the panel once.
++	  its framebuffer at probe and sends it to the panel once. An image
++	  given at build time (decon_boot_splash_image.h, zlib-compressed
++	  RGB565 of the panel size) is shown instead of the power symbol.
  endif
  
  

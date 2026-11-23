@@ -77,6 +77,14 @@ Bootloader rev2 blanks the panel before it starts the kernel, and the MCD panel 
 
 The splash is `CONFIG_EXYNOS_DECON_BOOT_SPLASH` (on by default). To build without it, add a line `EXYNOS_DECON_BOOT_SPLASH` to `kernel/nouh.config`.
 
+An image can replace the power symbol. Give `build.sh kernel` a raw RGB565 file (little endian, 450x450, 405 000 bytes) in `BOOT_SPLASH`:
+
+```bash
+BOOT_SPLASH=splash.rgb565 ./build.sh kernel
+```
+
+`build.sh` compresses it with zlib into `decon_boot_splash_image.h` in the kernel source; the driver inflates it into the framebuffer at probe and shows it as an RGB565 window. Without `BOOT_SPLASH` the header is removed and the power symbol is drawn. If the image is a frame of the boot animation (the same RGB565 pixels), the animation continues from the splash without a visible change. `BOOT_SPLASH_SIZE` (default `450x450`) gives other sizes; an image that does not match the panel falls back to the power symbol. A kernel built with an image differs from the one whose hash is in `STATUS.md`.
+
 ## 4. Firmware, trustlets, Magisk boot image
 
 ```bash
