@@ -33,7 +33,6 @@ Compare the hashes from the watch with `SHA256SUMS` before going on. Pulling `su
 | Magisk APK (31.1 used here) | [Magisk releases](https://github.com/topjohnwu/Magisk/releases) |
 | One UI 6 firmware `R870XXU1IYI1` | any Samsung firmware mirror; the `AP_R870XXU1IYI1_..._meta_WATCH_OS14.tar.md5` from it |
 | One UI 8 vendor or super image `R870XXS2JZG3` | the `super.img` from step 1, or the `super.img.lz4` of the `R870XXS2JZG3` AP |
-| IYI1 `boot.img` patched with Magisk | step 4 |
 
 ## 3. Kernel
 
@@ -53,16 +52,17 @@ Compare the hashes from the watch with `SHA256SUMS` before going on. Pulling `su
 ```bash
 ./build.sh firmware AP_R870XXU1IYI1_..._meta_WATCH_OS14.tar.md5   # -> work/fw/
 ./build.sh trustlets backup-JZG3/super.img                       # -> work/trustlets/
+./build.sh magisk Magisk-v31.1.apk                               # -> work/magisk_patched.img
 ```
 
 `trustlets` takes the `vendor` partition out of the super image (or a vendor image directly), copies `/tee` and checks the files against `overlay/trustlets-R870XXS2JZG3.sha256`.
 
-Patch `work/fw/boot.img` with Magisk: copy it to the watch while it still runs One UI 8 with Magisk, open the Magisk app, **Install → Select and Patch a File**, and copy the `magisk_patched-*.img` back. With Magisk 31.1 the result was `6918cec4…` (`STATUS.md`).
+`magisk` patches `work/fw/boot.img` on this computer with the `boot_patch.sh` and the binaries from the APK given (the `armeabi-v7a` ones for the watch, override with `MAGISK_ABI`), with the options the Magisk app chooses on the watch (`KEEPFORCEENCRYPT=true`, `KEEPVERITY=false`, pre-init storage `mmcblk0p33`, override with `PREINITDEVICE`). It also takes a Magisk build of your own. With Magisk 31.1 the image is the one **Install → Select and Patch a File** in the app made, `6918cec4…` (`STATUS.md`), padded with zeros to the partition size.
 
 ## 5. Images
 
 ```bash
-./build.sh images magisk_patched-31100.img   # -> work/images/
+./build.sh images work/magisk_patched.img   # -> work/images/
 ```
 
 | Output | Built from |

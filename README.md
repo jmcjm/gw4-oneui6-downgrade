@@ -42,7 +42,8 @@ The system partitions (`super`, `metadata`, `userdata`) are the stock One UI 6 o
 ./build.sh kernel
 ./build.sh firmware AP_R870XXU1IYI1_..._meta_WATCH_OS14.tar.md5
 ./build.sh trustlets backup-JZG3/super.img
-./build.sh images magisk_patched-31100.img
+./build.sh magisk Magisk-v31.1.apk
+./build.sh images work/magisk_patched.img
 ```
 
 Then flash from the Wi-Fi recovery with `scripts/flash-chunks.sh`. Backup, the Magisk step, flashing, and the way back to One UI 8 are in `docs/BUILDING.md`.

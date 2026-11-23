@@ -11,6 +11,8 @@
 #   ./build.sh firmware <IYI1 AP tar.md5> unpack the One UI 6 images
 #   ./build.sh trustlets <JZG3 image>     TEE trustlets from a JZG3 vendor
 #                                         or super image
+#   ./build.sh magisk <Magisk APK>        work/fw/boot.img patched with
+#                                         Magisk -> work/magisk_patched.img
 #   ./build.sh images <Magisk boot.img>   boot, dtbo, vbmeta, vbmeta_system
 #
 # Everything goes to work/ (override with WORK=...). The finished images
@@ -224,8 +226,59 @@ cmd_trustlets() {
     echo "trustlets in $out"
 }
 
+# Patches the IYI1 boot image with the Magisk APK given, on this computer,
+# with the APK's own boot_patch.sh: the x86_64 magiskboot, and magiskinit,
+# magisk and init-ld for the watch's ABI. The options are those the Magisk
+# app chose on the watch; with Magisk 31.1 the result is byte for byte the
+# image the app made (STATUS.md). PREINITDEVICE is what
+# 'magisk --preinit-device' prints on the watch.
+cmd_magisk() {
+    local apk=${1:?Magisk APK}
+    need unzip
+    [[ -f $WORK/fw/boot.img ]] || die "no firmware (run ./build.sh firmware)"
+    local abi=${MAGISK_ABI:-armeabi-v7a} out=$WORK/magisk_patched.img tmp f
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' RETURN
+
+    unzip -p "$apk" assets/boot_patch.sh > "$tmp/boot_patch.sh"
+    unzip -p "$apk" lib/x86_64/libmagiskboot.so > "$tmp/magiskboot"
+    for f in magiskinit magisk init-ld; do
+        unzip -p "$apk" "lib/$abi/lib$f.so" > "$tmp/$f"
+    done
+    for f in boot_patch.sh magiskboot magiskinit magisk init-ld; do
+        [[ -s $tmp/$f ]] || die "$f not found in $apk"
+    done
+    cp "$WORK/fw/boot.img" "$tmp/boot.img"
+
+    # boot_patch.sh without util_functions.sh (SOURCEDMODE): it only needs
+    # these three functions from it
+    (cd "$tmp" && SOURCEDMODE=1 BOOTMODE=true \
+        PREINITDEVICE=${PREINITDEVICE:-mmcblk0p33} \
+        KEEPVERITY=false KEEPFORCEENCRYPT=true PATCHVBMETAFLAG=false \
+        RECOVERYMODE=false LEGACYSAR=false \
+        bash -c 'ui_print() { echo "$1"; }
+                 abort() { echo "$1" >&2; exit 1; }
+                 grep_prop() { sed -n "s/^$1=//p" "$2"; }
+                 . ./boot_patch.sh boot.img' >/dev/null 2>&1) \
+        || die "boot_patch.sh failed"
+    "$tmp/magiskboot" cpio "$tmp/ramdisk.cpio" test >/dev/null 2>&1 && die "ramdisk not patched"
+
+    # The stock image ends with an AVB footer, and so does the repacked
+    # one. The app's image had none; with it, 'magiskboot repack' in
+    # 'images' would append the stock vbmeta to boot.img. Remove it.
+    local size
+    size=$(stat -c %s "$tmp/new-boot.img")
+    if [[ $(tail -c 64 "$tmp/new-boot.img" | head -c 4) == AVBf ]]; then
+        truncate -s $((size - 64)) "$tmp/new-boot.img"
+        truncate -s "$size" "$tmp/new-boot.img"
+    fi
+    mv "$tmp/new-boot.img" "$out"
+    echo "$(sha256sum "$out" | cut -c1-16)  magisk_patched.img"
+}
+
 cmd_images() {
-    local magisk_boot=${1:?IYI1 boot.img patched with Magisk}
+    local magisk_boot
+    magisk_boot=$(realpath "${1:?IYI1 boot.img patched with Magisk}")
     need_magiskboot
     need python3 gzip
     local dtc=$WORK/out/scripts/dtc/dtc image=$WORK/out/arch/arm64/boot/Image
@@ -303,9 +356,9 @@ cmd_images() {
 }
 
 case ${1:-} in
-    tools|toolchain|source|kernel|firmware|trustlets|images)
+    tools|toolchain|source|kernel|firmware|trustlets|magisk|images)
         c=$1; shift; "cmd_$c" "$@" ;;
     *)
-        sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
         exit 2 ;;
 esac
