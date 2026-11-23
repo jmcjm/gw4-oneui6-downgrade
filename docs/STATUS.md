@@ -10,8 +10,8 @@ Device: Samsung Galaxy Watch 4 (SM-R870), bootloader `R870XXS2JZG3` (binary revi
 | Metadata encryption and file-based encryption of `/data`, KeyMint, gatekeeper | works (JZG3 trustlets) |
 | Display | works |
 | Charging (wireless, `p9222`) | works |
-| Wi-Fi | works, `wlan0` gets an address; ADB over TCP on port 5555 after boot (`overlay.d/adb-tcp.rc`) |
-| Magisk 31.1 | works, `su` in the ADB shell |
+| Wi-Fi | works, `wlan0` gets an address; ADB over TCP on port 5555 with key authentication through the `adb-wifi-keep` module |
+| Magisk 31.1 | works, `su` in the ADB shell; also a Magisk 31.1 build of our own (`31.1-wear`), put in with `build.sh magisk` |
 | Both CPU cores | work: CPU1 starts at boot, CPU hotplug powers it off (`CLUSTER0_CPU1_STATUS` 0) and back on with PSCI `CPU_ON` |
 | CPU idle C2 (core power-down) | works on both cores at the same time |
 | System sleep (suspend to RAM) with both cores | works: CPU1 powered off by `CPU_OFF`, `EXYNOS-PM: MIF down`, `apsoc_count` rises, no early wakeup |
@@ -45,7 +45,7 @@ Outputs of `build.sh images`:
 | `Image` (kernel, `build.sh kernel`) | `d3c20d57dd33cbc7296e3f98b9de1d911491662a26663f35339a718e4e47d9de` |
 | `boot.img` | `a34f6774701c57d6a6a320f5646488f03455cdf03769aada513388aee87c89d0` |
 
-`dtbo`, `vbmeta`, `vbmeta_system` and `boot` are byte for byte the images that were flashed and booted. `build.sh` fixes all embedded build times (initramfs, `__TIME__` in the Wi-Fi drivers, the banner), so its output does not depend on when it runs.
+`dtbo`, `vbmeta`, `vbmeta_system` and `boot` are byte for byte the images that were flashed and booted. This `boot.img` is the one with Magisk 31.1 and the earlier overlay that opened ADB without keys; `boot.img` depends on the Magisk APK given to `build.sh magisk`. `build.sh` fixes all embedded build times (initramfs, `__TIME__` in the Wi-Fi drivers, the banner), so its output does not depend on when it runs.
 
 ## Partition sizes
 
