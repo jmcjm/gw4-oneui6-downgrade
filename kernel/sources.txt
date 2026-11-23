@@ -1,0 +1,11 @@
+# Samsung kernel sources for SM-R870 R870XXU1IYI1 (Linux 4.19.151).
+# Fields: upload id, attach id, file name, sha256, how it is applied.
+#
+#   base   - full source; Kernel.tar.gz inside the zip, unpacked at the top
+#   update - Kernel/... tarball inside the zip, unpacked over the base
+#
+# Order matters: base, then the SM-R870 dts and defconfig (freshbl),
+# then the R870XXU1IYI1 kernel update.
+12895 38266 SM-R860_NA_Opensource.zip                                                                                                                         a80924fde40064214045f97d4ae52189f941f33ea2d4199bbde8936a7fd24b4f base
+12895 44994 SM-R870_NA_Opensource_R870XXU1IXK1_dts.zip                                                                                                        c19360e4951d0b981d436c59ac8cf9dc15a26684335d9f858c2f408e59ed9c75 update
+14116 45015 SM-R860_Opensource_R865FXXU1IYI1_R865NKOU1DYI1_R865USQU1IYI1_R870XXU1IYI1_R870ZCU1IYI1_R875FXXU1IYI1_R875NKOU1DYI1_R875USQU1IYI1_R880TBU1IYI1_R880TRU1IYI1_R880XXU1IYI1.zip af589eaff3dcf1790b1246e9789d0b9f5a9a87ba8473c563d8d75a8443c7cb4d update
