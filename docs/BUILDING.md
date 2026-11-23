@@ -67,7 +67,7 @@ Patch `work/fw/boot.img` with Magisk: copy it to the watch while it still runs O
 
 | Output | Built from |
 |---|---|
-| `boot.img` | the Magisk-patched IYI1 image with the 4.19 kernel from step 3 (Magisk's DEFEX hexpatch, gzip), the IYI1 device tree adapted by `scripts/patch-dts.py` (the two nodes for the bootloader overlay, the second core's MPIDR and `cpu-map`, the rev2 `exynos-cpupm` node), and in the ramdisk the overlay with the JZG3 trustlets, the rebuilt kernel modules and ADB over TCP |
+| `boot.img` | the Magisk-patched IYI1 image with the 4.19 kernel from step 3 (Magisk's DEFEX hexpatch, gzip), the IYI1 device tree adapted by `scripts/patch-dts.py` (the two nodes for the bootloader overlay, the second core's MPIDR and `cpu-map`, the rev2 `exynos-cpupm` node), and in the ramdisk the overlay with the JZG3 trustlets and the rebuilt kernel modules |
 | `dtbo.img`, `vbmeta_system.img` | stock IYI1 without the Samsung signature footer |
 | `vbmeta.img` | stock IYI1 without the footer, flags `3` |
 
@@ -96,7 +96,7 @@ adb -s $S shell reboot
 
 The first boot takes long (metadata encryption setup, ART). The boot animation appears after about 45 s.
 
-After the first boot, install the Magisk app (`adb install Magisk-v31.1.apk` over wireless debugging), let it finish its setup and reboot; if `su` is still missing, clear the app's data. **Never use Install → Direct Install** (or any other way of patching `boot` from the app): Magisk restores the stock ramdisk from its backup before patching, which drops the TEE and module overlay, and the next boot stays on a black screen.
+After the first boot, install the Magisk app (`adb install Magisk-v31.1.apk` over wireless debugging), let it finish its setup and reboot; if `su` is still missing, clear the app's data. For ADB on a fixed port after every boot, install the `adb-wifi-keep` module (README). **Never use Install → Direct Install** (or any other way of patching `boot` from the app): Magisk restores the stock ramdisk from its backup before patching, which drops the TEE and module overlay, and the next boot stays on a black screen.
 
 If a boot fails, force a reboot into recovery (hold both keys, then choose recovery from the bootloader menu) and read the log of the failed boot:
 

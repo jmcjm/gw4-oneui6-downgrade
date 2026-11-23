@@ -23,7 +23,7 @@ Samsung does not allow this. The One UI 8 update raises the bootloader binary re
 
 The kernel is Samsung's 4.19 source for `R870XXU1IYI1` with seven patches, built without the Samsung hypervisor clients (UH, RKP, KDP): the KDP interface of the rev2 hypervisor changed, and its RKP expects the 5.15 kernel memory layout. Each problem, with the log lines that showed it, is described in `docs/LESSONS.md`.
 
-ADB stays available over TCP on port 5555 after every boot (`overlay.d/adb-tcp.rc`), without key authentication: anyone on the network gets a shell, and root through Magisk. Use it only on a trusted network, or remove the file from the overlay.
+The boot image does not open ADB over TCP. For ADB on a fixed port, with key authentication, use the `adb-wifi-keep` module from [gw4-magisk-modules](https://github.com/jmcjm/gw4-magisk-modules): it keeps Wi-Fi on and adbd on TCP 5555 after every boot and authorizes the keys it ships.
 
 The system partitions (`super`, `metadata`, `userdata`) are the stock One UI 6 ones. Everything that changes is in `boot`: the kernel, the device tree, and a Magisk `overlay.d` in the ramdisk that puts the trustlets and modules in place before the services that need them start.
 
