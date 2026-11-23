@@ -4,7 +4,7 @@ Runs One UI 6 Watch (`R870XXU1IYI1`, Android 14, kernel 4.19) on a Samsung Galax
 
 Samsung does not allow this. The One UI 8 update raises the bootloader binary revision from 1 to 2, the revision is enforced by an eFuse counter, and every One UI 6 image is signed for revision 1. Flashing stock One UI 6 through Odin or NetOdin is refused. With an unlocked bootloader the old system can still run on the new bootloader, together with the TEE, the hypervisor and the power management firmware that come with it, after fixing ten incompatibilities between them.
 
-**Status: boots and runs on both CPU cores, with CPU idle power-down and system sleep working.** Bluetooth, phone pairing and sensors have not been checked. Details in `docs/STATUS.md`.
+**Status: boots and runs on both CPU cores, with CPU idle power-down and system sleep working.** Bluetooth and phone pairing work; sensors and Samsung Health have not been checked. Details in `docs/STATUS.md`.
 
 ## What had to change
 
@@ -63,7 +63,7 @@ Not in the repository: firmware, trustlets, kernel source, toolchains, built ima
 
 ## Limitations
 
-- Bluetooth, phone pairing, sensors and Samsung Health have not been checked.
+- Sensors and Samsung Health have not been checked.
 - While a computer keeps an ADB connection open, the watch wakes from system sleep within a second; disconnect `adb` when the battery matters.
 - `/data` is the 2 GiB factory f2fs; the partition is larger.
 - Only `R870XXU1IYI1` on bootloader `R870XXS2JZG3` has been tried.
