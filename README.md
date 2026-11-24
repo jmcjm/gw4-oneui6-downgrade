@@ -26,7 +26,7 @@ The kernel is Samsung's 4.19 source for `R870XXU1IYI1` with seven patches for th
 
 The boot image does not open ADB over TCP. For ADB on a fixed port, with key authentication, use the `adb-wifi-keep` module from [gw4-magisk-modules](https://github.com/jmcjm/gw4-magisk-modules): it keeps Wi-Fi on and adbd on TCP 5555 after every boot and authorizes the keys it ships.
 
-The system partitions (`super`, `metadata`, `userdata`) are the stock One UI 6 ones. Everything that changes is in `boot`: the kernel, the device tree, and a Magisk `overlay.d` in the ramdisk that puts the trustlets and modules in place before the services that need them start, starts the boot animation right after SurfaceFlinger, and turns auto-rotate off once boot completes.
+The system partitions (`super`, `metadata`, `userdata`) are the stock One UI 6 ones. Everything that changes is in `boot`: the kernel, the device tree, and a Magisk `overlay.d` in the ramdisk that puts the trustlets and modules in place before the services that need them start, and starts the boot animation right after SurfaceFlinger.
 
 ## Requirements
 
