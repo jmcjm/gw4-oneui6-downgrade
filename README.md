@@ -1,6 +1,8 @@
-# Galaxy Watch 4 (SM-R870): One UI 6 Watch on a One UI 8 bootloader
+# Galaxy Watch 4 (SM-R870, SM-R860): One UI 6 Watch on a One UI 8 bootloader
 
 Runs One UI 6 Watch (`R870XXU1IYI1`, Android 14, kernel 4.19) on a Samsung Galaxy Watch 4 (SM-R870) that has already been updated to One UI 8 Watch (`R870XXS2JZG3`).
+
+The same build, with `MODEL=R860`, makes the images for the 40 mm SM-R860 (`R860XXU1IYI1` on `R860XXS2JZG3`); they are built but not yet booted (`docs/BUILDING.md`, section SM-R860).
 
 Samsung does not allow this. The One UI 8 update raises the bootloader binary revision from 1 to 2, the revision is enforced by an eFuse counter, and every One UI 6 image is signed for revision 1. Flashing stock One UI 6 through Odin or NetOdin is refused. With an unlocked bootloader the old system can still run on the new bootloader, together with the TEE, the hypervisor and the power management firmware that come with it, after fixing eleven incompatibilities between them.
 
@@ -67,7 +69,7 @@ Not in the repository: firmware, trustlets, kernel source, toolchains, built ima
 
 - While a computer keeps an ADB connection open, the watch wakes from system sleep within a second; disconnect `adb` when the battery matters.
 - `/data` is the 2 GiB factory f2fs; the partition is larger.
-- Only `R870XXU1IYI1` on bootloader `R870XXS2JZG3` has been tried.
+- Only `R870XXU1IYI1` on bootloader `R870XXS2JZG3` has been booted. The SM-R860 build is untested.
 - Over-the-air updates must not be installed; they would bring back a signed rev2 system.
 
 ## License

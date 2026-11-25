@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# One UI 6 Watch (R870XXU1IYI1) on a Galaxy Watch 4 (SM-R870) whose
-# bootloader is at binary revision 2 (R870XXS2JZG3, One UI 8 Watch).
+# One UI 6 Watch (IYI1) on a Galaxy Watch 4 whose bootloader is at binary
+# revision 2 (XXS2JZG3, One UI 8 Watch). MODEL selects the watch:
+#
+#   MODEL=R870 (default)  SM-R870, 44 mm, R870XXU1IYI1 on R870XXS2JZG3
+#   MODEL=R860            SM-R860, 40 mm, R860XXU1IYI1 on R860XXS2JZG3
 #
 # Steps, in order (see docs/BUILDING.md):
 #
@@ -15,12 +18,24 @@
 #                                         Magisk -> work/magisk_patched.img
 #   ./build.sh images <Magisk boot.img>   boot, dtbo, vbmeta, vbmeta_system
 #
-# Everything goes to work/ (override with WORK=...). The finished images
-# are in work/images/, the One UI 6 partitions in work/fw/.
+# Everything goes to work/ for the R870 and to work-R860/ for the R860
+# (override with WORK=...). The finished images are in images/ there, the
+# One UI 6 partitions in fw/.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
-WORK=${WORK:-$here/work}
+MODEL=${MODEL:-R870}
+# Per model: the defconfig, and the panel size used as the default for
+# BOOT_SPLASH_SIZE. The two watches share the SoC device tree, the
+# partition layout and the kernel patches; the defconfigs differ in one
+# sensor option.
+case $MODEL in
+    R870) DEFCONFIG=exynos5515-freshbl_defconfig PANEL_SIZE=450x450 work_default=$here/work ;;
+    R860) DEFCONFIG=exynos5515-freshbs_defconfig PANEL_SIZE=396x396 work_default=$here/work-R860 ;;
+    *) echo "build.sh: unknown MODEL $MODEL (R870 or R860)" >&2; exit 1 ;;
+esac
+TRUSTLET_SUMS=$here/overlay/trustlets-${MODEL}XXS2JZG3.sha256
+WORK=${WORK:-$work_default}
 MAGISKBOOT=${MAGISKBOOT:-$here/tools/magiskboot}
 BUILD_IMAGE=localhost/gw4-kbuild-bookworm:amd64
 
@@ -38,7 +53,7 @@ GCC_URL=https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch6
 CLANG_BANNER='Android (6443078 based on r383902) clang version 11.0.1'
 LD_BANNER='GNU ld (binutils-2.27-bd24d23f) 2.27.0.20170315'
 
-# partition sizes on SM-R870 (bytes)
+# partition sizes (bytes), the same on SM-R870 and SM-R860
 SIZE_BOOT=37748736
 SIZE_DTBO=8388608
 SIZE_VBMETA=524288
@@ -118,10 +133,10 @@ cmd_source() {
 }
 
 # Optional boot splash image for patch 0009: BOOT_SPLASH names a raw
-# RGB565 file (little endian, BOOT_SPLASH_SIZE pixels, 450x450 by
-# default). It is compressed into decon_boot_splash_image.h in the kernel
-# source; without BOOT_SPLASH the header is removed and the kernel draws
-# its power symbol.
+# RGB565 file (little endian, BOOT_SPLASH_SIZE pixels, the panel size by
+# default: 450x450 on the R870, 396x396 on the R860). It is compressed
+# into decon_boot_splash_image.h in the kernel source; without BOOT_SPLASH
+# the header is removed and the kernel draws its power symbol.
 splash_header() {
     local h=$WORK/kernel/drivers/video/fbdev/exynos/dpu30/decon_boot_splash_image.h
     if [[ -z ${BOOT_SPLASH:-} ]]; then
@@ -130,7 +145,7 @@ splash_header() {
     fi
     need python3
     [[ -f $BOOT_SPLASH ]] || die "BOOT_SPLASH: no such file: $BOOT_SPLASH"
-    python3 -I - "$BOOT_SPLASH" "${BOOT_SPLASH_SIZE:-450x450}" "$h" <<'EOF'
+    python3 -I - "$BOOT_SPLASH" "${BOOT_SPLASH_SIZE:-$PANEL_SIZE}" "$h" <<'EOF'
 import sys, zlib
 src, size, out = sys.argv[1:]
 w, h = (int(v) for v in size.lower().split('x'))
@@ -172,6 +187,7 @@ EOF
     podman run --rm \
         -e KBUILD_BUILD_USER -e KBUILD_BUILD_HOST \
         -e KBUILD_BUILD_TIMESTAMP -e KBUILD_BUILD_VERSION \
+        -e DEFCONFIG="$DEFCONFIG" \
         -v "$WORK/kernel:/work/kernel:Z" \
         -v "$WORK/out:/work/out-nouh:Z" \
         -v "$WORK/toolchains:/tc:ro,z" \
@@ -193,7 +209,7 @@ EOF
                   HOSTCFLAGS=-fcommon
                   "KCFLAGS=-Wno-builtin-macro-redefined -include /work/out-nouh/build-date.h"
                   -j"$(nproc)")
-            "${make[@]}" exynos5515-freshbl_defconfig
+            "${make[@]}" "$DEFCONFIG"
             while read -r opt; do
                 [[ -z $opt || $opt == \#* ]] && continue
                 /work/kernel/scripts/config --file /work/out-nouh/.config --disable "$opt"
@@ -220,7 +236,7 @@ unpack_ap_image() {
 }
 
 cmd_firmware() {
-    local ap=${1:?AP tarball of R870XXU1IYI1}
+    local ap=${1:?AP tarball of ${MODEL}XXU1IYI1}
     need tar lz4 simg2img
     mkdir -p "$WORK/fw"
     local n
@@ -255,8 +271,8 @@ cmd_trustlets() {
     # debugfs warns that it cannot set the owner as a normal user
     debugfs -R "rdump /tee $tmp" "$vendor" >/dev/null 2>&1 || true
     cp -r "$tmp/tee/." "$out/"
-    (cd "$out" && sha256sum -c --quiet "$here/overlay/trustlets-R870XXS2JZG3.sha256") \
-        || die "trustlets do not match R870XXS2JZG3"
+    (cd "$out" && sha256sum -c --quiet "$TRUSTLET_SUMS") \
+        || die "trustlets do not match ${MODEL}XXS2JZG3"
     echo "trustlets in $out"
 }
 
@@ -359,7 +375,7 @@ cmd_images() {
     mkdir -p "$ovl/overlay.d/sbin"
     install -m 0644 "$here"/overlay/overlay.d/*.rc "$ovl/overlay.d/"
     install -m 0755 "$here"/overlay/overlay.d/sbin/*.sh "$ovl/overlay.d/sbin/"
-    # TEE trustlets of R870XXS2JZG3
+    # TEE trustlets of ${MODEL}XXS2JZG3
     while IFS= read -r f; do
         install -m 0644 "$WORK/trustlets/$f" "$ovl/overlay.d/sbin/tee-jzg3-${f//\//_}"
     done < <(cd "$WORK/trustlets" && find . -type f | sed 's|^\./||' | sort)

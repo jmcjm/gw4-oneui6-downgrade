@@ -51,7 +51,34 @@ These are the outputs of the default build from this repository, with the power 
 
 The watch does not run this default `boot.img` byte for byte. It runs a variant built locally from the same sources and the same Magisk image, with a custom splash image given in `BOOT_SPLASH` (an image that is not part of this repository): `Image` `69d83d92489745face4f9f81b33084d2c3b9b2c3c49555d1c5324278eadba950`, `boot.img` `4698c41246f271e10e5a7a406254008b4fc4643fb5924c3497f40669bb6b25f8`. It differs from the default build only in the kernel, in the compressed image and the code that shows it; the ramdisk, the device tree and the other images are the same. `build.sh` fixes all embedded build times (initramfs, `__TIME__` in the Wi-Fi drivers, the banner), so its output does not depend on when it runs.
 
+## SM-R860
+
+Built with `MODEL=R860` on 2026-11-26, **not booted yet**. The watch it is meant for runs stock `R860XXS2JZG3` (unlocked bootloader).
+
+Inputs:
+
+| File | SHA-256 |
+|---|---|
+| `boot.img` of `R860XXU1IYI1` (from the AP) | `6583e3a0b2d3f17c41f7c7e4c002814a0f0426298641a21998c15df7e2a7f65a` |
+| `super` of `R860XXU1IYI1` (raw) | `281844a646e15e2cb9bb9d1dff5ec326a7c83c05bbbce467484e2975b8cc672e` |
+| JZG3 trustlets | `overlay/trustlets-R860XXS2JZG3.sha256` |
+| `work-R860/magisk_patched.img` (Magisk `31.1-wear`, the APK above) | `bc76016a019a080aa75021d4aa875b949fbc97eb63197857c45d58d5943870f9` |
+
+Outputs of `build.sh images`:
+
+| File | SHA-256 |
+|---|---|
+| `Image` (`exynos5515-freshbs_defconfig`, patches `0001` to `0009`, no `BOOT_SPLASH`) | `de0323202802f64a9122eb90d04c37c519cd7fdf4ea2053b852c686af313402d` |
+| `boot.img` | `1cf4371b57ecab96e082221b0febaea2ae1c91b55d115162cdad538345afd7ae` |
+| `dtbo.img` | `1b5907e52018f1cd557c56787b3a8b5a99cd72a73a566d05096f2666ada1a493` |
+| `vbmeta.img` | `c1b1fe3e1af1d42ad2cfb95d1b501796603906ee4ab2598d21f2778d9efe79b5` |
+| `vbmeta_system.img` | `d22b97393d01b8a14f604ac5540113e2530db10cdffb1d7c1bb1a4855f3001d8` |
+
+The kernel `.config` equals the one in the stock `R860XXU1IYI1` kernel except for the hypervisor clients (`kernel/nouh.config`) and `CONFIG_EXYNOS_DECON_BOOT_SPLASH`.
+
 ## Partition sizes
+
+The same on the SM-R870 and the SM-R860 (identical PIT).
 
 | Partition | Bytes |
 |---|---|

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Replaces the device tree in the dtb section of a Samsung boot image.
 
-The dtb section of the R870XXU1IYI1 boot image is a dt_table (the same
-format as dtbo) with one entry. The header and the entry are kept; only
-the total size and the entry size change.
+The dtb section of the IYI1 boot image (SM-R870 and SM-R860) is a
+dt_table (the same format as dtbo) with one entry. The header and the
+entry are kept; only the total size and the entry size change.
 
 Usage:
   dt-table.py extract <section> <out.dtb>

@@ -9,6 +9,24 @@
 
 Host tools: `podman`, `curl`, `unzip`, `tar`, `git`, `lz4`, `simg2img`, `lpunpack`, `debugfs` (e2fsprogs), `python3`, `adb`. On Fedora: `android-tools e2fsprogs lz4 podman`.
 
+## SM-R860
+
+The same steps build One UI 6 `R860XXU1IYI1` for an SM-R860 (40 mm) on `R860XXS2JZG3`. Set `MODEL=R860` for every `build.sh` call; the work directory is then `work-R860/` and the inputs are the R860 ones:
+
+```bash
+export MODEL=R860
+./build.sh source
+./build.sh kernel
+./build.sh firmware AP_R860XXU1IYI1_..._meta_WATCH_OS14.tar.md5
+./build.sh trustlets <R860XXS2JZG3 super or vendor image>
+./build.sh magisk Magisk-v31.1.apk
+./build.sh images work-R860/magisk_patched.img
+```
+
+`MODEL` changes three things: the kernel is built from `exynos5515-freshbs_defconfig`, the trustlets are checked against `overlay/trustlets-R860XXS2JZG3.sha256`, and `BOOT_SPLASH_SIZE` defaults to the 396x396 panel. Everything else is shared, because it is the same on both watches: the PIT (partition numbers and sizes, so also `PREINITDEVICE`), the SoC device tree in `boot` (byte for byte, in IYI1 and in JZG3), the names of the JZG3 trustlets (only their signatures differ), the two modules in `/lib/modules`, and the kernel source and patches. The two defconfigs differ in `CONFIG_SENSORS_SSP_HRM_ADI` only. The board device tree comes with the stock R860 `dtbo`.
+
+Flashing and the way back work as below, with the R860 images and an R860 backup. The R860 build has not been booted yet (`STATUS.md`).
+
 ## 1. Back up One UI 8
 
 From the Wi-Fi recovery (`adb connect gw4-recovery.lan:5555`):
@@ -77,13 +95,13 @@ Bootloader rev2 blanks the panel before it starts the kernel, and the MCD panel 
 
 The splash is `CONFIG_EXYNOS_DECON_BOOT_SPLASH` (on by default). To build without it, add a line `EXYNOS_DECON_BOOT_SPLASH` to `kernel/nouh.config`.
 
-An image can replace the power symbol. Give `build.sh kernel` a raw RGB565 file (little endian, 450x450, 405 000 bytes) in `BOOT_SPLASH`:
+An image can replace the power symbol. Give `build.sh kernel` a raw RGB565 file (little endian, the panel size: 450x450 and 405 000 bytes on the R870, 396x396 and 313 632 bytes on the R860) in `BOOT_SPLASH`:
 
 ```bash
 BOOT_SPLASH=splash.rgb565 ./build.sh kernel
 ```
 
-`build.sh` compresses it with zlib into `decon_boot_splash_image.h` in the kernel source; the driver inflates it into the framebuffer at probe and shows it as an RGB565 window. Without `BOOT_SPLASH` the header is removed and the power symbol is drawn. If the image is a frame of the boot animation (the same RGB565 pixels), the animation continues from the splash without a visible change. `BOOT_SPLASH_SIZE` (default `450x450`) gives other sizes; an image that does not match the panel falls back to the power symbol. A kernel built with an image differs from the one whose hash is in `STATUS.md`.
+`build.sh` compresses it with zlib into `decon_boot_splash_image.h` in the kernel source; the driver inflates it into the framebuffer at probe and shows it as an RGB565 window. Without `BOOT_SPLASH` the header is removed and the power symbol is drawn. If the image is a frame of the boot animation (the same RGB565 pixels), the animation continues from the splash without a visible change. `BOOT_SPLASH_SIZE` (default: the panel size of `MODEL`) gives other sizes; an image that does not match the panel falls back to the power symbol. A kernel built with an image differs from the one whose hash is in `STATUS.md`.
 
 ## 4. Firmware, trustlets, Magisk boot image
 

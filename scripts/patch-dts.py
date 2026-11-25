@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Adapts the R870XXU1IYI1 device tree to bootloader rev2 (R870XXS2JZG3).
+"""Adapts the IYI1 device tree to bootloader rev2 (XXS2JZG3).
+
+The SoC device tree in the boot image is byte for byte the same on the
+SM-R870 and the SM-R860, in IYI1 and in JZG3, so one script serves both.
 
 1. The rev2 bootloader applies its own device tree overlay after the DTBO.
    That overlay references the labels log_first and log_kevents_small,
@@ -13,7 +16,7 @@
    compatible: cpd_cl0 with cal-id, sicd as a type 2 (system) mode with
    deferred-enabled, and the wakeup-mask node with the SICD wakeup masks
    and their status registers. The values are those of the R870XXS2JZG3
-   device tree.
+   device tree, which is identical to the R860XXS2JZG3 one.
 
 Usage: patch-dts.py <in.dts> <out.dts>
 """
