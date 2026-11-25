@@ -16,7 +16,7 @@ The files in `kernel/patches/` modify the Linux kernel source released by Samsun
 
 The build combines this project with files that are not part of it and are not covered by this license:
 
-- **Samsung firmware**: the One UI 6 Watch images (`R870XXU1IYI1`) and the TEE trustlets taken from the One UI 8 Watch vendor partition (`R870XXS2JZG3`) belong to Samsung Electronics and its suppliers. The repository holds none of them, only checksums. You provide the firmware, and the built `boot.img` contains Samsung trustlets and the Samsung ramdisk, so built images must not be redistributed.
+- **Samsung firmware**: the One UI 6 Watch images (`R870XXU1IYI1`, `R860XXU1IYI1`) and the TEE trustlets taken from the One UI 8 Watch vendor partition (`R870XXS2JZG3`, `R860XXS2JZG3`) belong to Samsung Electronics and its suppliers. The repository holds none of them, only checksums. You provide the firmware, and the built `boot.img` contains Samsung trustlets and the Samsung ramdisk, so built images must not be redistributed.
 - **The Samsung kernel source** is downloaded from [opensource.samsung.com](https://opensource.samsung.com) under the GNU General Public License, version 2.
 - **The AOSP toolchain** (`clang-r383902`, `aarch64-linux-android-4.9`) is downloaded from [android.googlesource.com](https://android.googlesource.com) under its own licenses.
 - **Magisk** ([topjohnwu/Magisk](https://github.com/topjohnwu/Magisk), GNU General Public License, version 3): `magiskboot` is extracted from a Magisk APK you provide and runs as a separate program during the build, and the boot image you patch with Magisk contains its ramdisk. Neither is stored here.
