@@ -24,7 +24,7 @@ Samsung does not allow this. The One UI 8 update raises the bootloader binary re
 | With real MPIDRs in the device tree, the 4.19 `sleep.S` gives both cores the same saved-context slot, and both cores in C2 hang the system | kernel patch: hash the MPIDR as it is, as mainline does |
 | The bootloader blanks the panel before the kernel starts, so the screen stays black for about 20 s until the boot animation; it also leaves its own display window enabled with an address the kernel's SysMMU does not map | kernel patch: a boot splash sent once at probe, with every other display window disabled first |
 
-The kernel is Samsung's 4.19 source for `R870XXU1IYI1` with seven patches for the rev2 bootloader, an eighth that adds a charge limit (`batt_full_capacity`, off by default) and a ninth that shows a boot splash on the blank panel, built without the Samsung hypervisor clients (UH, RKP, KDP): the KDP interface of the rev2 hypervisor changed, and its RKP expects the 5.15 kernel memory layout. Each problem, with the log lines that showed it, is described in `docs/LESSONS.md`.
+The kernel is [gw4-kernel-4.19](https://github.com/jmcjm/gw4-kernel-4.19): Samsung's 4.19 source for `R870XXU1IYI1` merged with the CIP 4.19 kernel (`4.19.325-cip137`, the stable releases up to 4.19.325 and the CIP backports after them), with seven changes for the rev2 bootloader, an eighth that adds a charge limit (`batt_full_capacity`, off by default) and a ninth that shows a boot splash on the blank panel. It is built without the Samsung hypervisor clients (UH, RKP, KDP): the KDP interface of the rev2 hypervisor changed, and its RKP expects the 5.15 kernel memory layout. Each problem, with the log lines that showed it, is described in `docs/LESSONS.md`.
 
 The boot image does not open ADB over TCP. For ADB on a fixed port, with key authentication, use the `adb-wifi-keep` module from [gw4-magisk-modules](https://github.com/jmcjm/gw4-magisk-modules): it keeps Wi-Fi on and adbd on TCP 5555 after every boot and authorizes the keys it ships.
 
@@ -56,11 +56,10 @@ Then flash from the Wi-Fi recovery with `scripts/flash-chunks.sh`. Backup, the M
 | Path | Contents |
 |---|---|
 | `build.sh` | All build steps |
-| `kernel/sources.txt` | Samsung source packages (opensource.samsung.com ids and SHA-256) |
-| `kernel/patches/` | The kernel patches: `0001` to `0007` for bootloader rev2, `0008` the charge limit, `0009` the boot splash |
+| `kernel/source.txt` | The kernel source for each model: the gw4-kernel-4.19 branch and pinned commit |
 | `kernel/nouh.config` | Options disabled in `exynos5515-freshbl_defconfig` |
 | `overlay/` | Magisk `overlay.d` scripts and the expected trustlet hashes |
-| `scripts/` | Download from opensource.samsung.com, signature stripping, device tree patch, chunked flashing |
+| `scripts/` | Signature stripping, device tree patch, chunked flashing |
 | `docs/` | Building and flashing, verified state, lessons learned |
 
 Not in the repository: firmware, trustlets, kernel source, toolchains, built images. They contain Samsung or third-party material; the build fetches or extracts them, and `work/` and `tools/` are ignored.
@@ -74,4 +73,4 @@ Not in the repository: firmware, trustlets, kernel source, toolchains, built ima
 
 ## License
 
-GPL-2.0-or-later, the kernel patches GPL-2.0-only; see `LICENSE.md` and `COPYING`. Built images contain Samsung firmware and must not be shared.
+GPL-2.0-or-later; the kernel (gw4-kernel-4.19) is GPL-2.0-only. See `LICENSE.md` and `COPYING`. Built images contain Samsung firmware and must not be shared.

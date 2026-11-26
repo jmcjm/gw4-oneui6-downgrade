@@ -9,7 +9,7 @@
 #
 #   ./build.sh tools <Magisk APK>         x86_64 magiskboot -> tools/
 #   ./build.sh toolchain                  AOSP clang-r383902 + binutils 2.27
-#   ./build.sh source                     Samsung 4.19 source + patches
+#   ./build.sh source                     kernel source (gw4-kernel-4.19)
 #   ./build.sh kernel                     build the kernel (in a container)
 #   ./build.sh firmware <IYI1 AP tar.md5> unpack the One UI 6 images
 #   ./build.sh trustlets <JZG3 image>     TEE trustlets from a JZG3 vendor
@@ -26,8 +26,9 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 MODEL=${MODEL:-R870}
 # Per model: the defconfig, and the panel size used as the default for
-# BOOT_SPLASH_SIZE. The two watches share the SoC device tree, the
-# partition layout and the kernel patches; the defconfigs differ in one
+# BOOT_SPLASH_SIZE. The two watches share the SoC device tree and the
+# partition layout; the kernel source of each is a branch of
+# gw4-kernel-4.19 (kernel/source.txt), and the defconfigs differ in one
 # sensor option.
 case $MODEL in
     R870) DEFCONFIG=exynos5515-freshbl_defconfig PANEL_SIZE=450x450 work_default=$here/work ;;
@@ -95,44 +96,23 @@ cmd_toolchain() {
 }
 
 cmd_source() {
-    need unzip tar git sha256sum
-    local dl=$WORK/dl src=$WORK/kernel
-    mkdir -p "$dl"
+    need git
+    local src=$WORK/kernel model url branch commit
+    while read -r model url branch commit; do
+        [[ $model == "$MODEL" ]] && break
+    done < <(grep -v '^#' "$here/kernel/source.txt")
+    [[ $model == "$MODEL" && -n ${commit:-} ]] || die "no kernel source for $MODEL in kernel/source.txt"
+
+    # only the pinned commit, without history (about 200 MB)
     rm -rf "$src"
-    mkdir -p "$src"
-
-    local up at name sum how inner
-    while read -r up at name sum how; do
-        [[ -z $up || $up == \#* ]] && continue
-        if [[ ! -f $dl/$name ]] || ! echo "$sum  $dl/$name" | sha256sum -c --quiet 2>/dev/null; then
-            echo "downloading $name"
-            "$here/scripts/fetch-samsung.sh" "$up" "$at" "$dl/$name"
-        fi
-        echo "$sum  $dl/$name" | sha256sum -c --quiet || die "checksum mismatch for $name"
-
-        case $how in
-            base)
-                unzip -p "$dl/$name" Kernel.tar.gz | tar xz -C "$src"
-                ;;
-            update)
-                inner=$(unzip -Z1 "$dl/$name" | grep -i 'kernel\.tar\.gz$')
-                unzip -p "$dl/$name" "$inner" | tar xz --strip-components=1 -C "$src"
-                ;;
-            *) die "unknown source type $how" ;;
-        esac
-        echo "applied $name ($how)"
-    done < "$here/kernel/sources.txt"
-
-    # git apply outside a repository; the ceiling keeps it from treating
-    # work/ as part of this project's repository
-    local p
-    for p in "$here"/kernel/patches/*.patch; do
-        (cd "$src" && GIT_CEILING_DIRECTORIES=$(dirname "$src") git apply -p1 "$p")
-        echo "patched: $(basename "$p")"
-    done
+    git init -q "$src"
+    git -C "$src" fetch -q --depth 1 "$url" "$commit"
+    git -C "$src" -c advice.detachedHead=false checkout -q FETCH_HEAD
+    [[ $(git -C "$src" rev-parse HEAD) == "$commit" ]] || die "fetched commit is not $commit"
+    echo "kernel source: $url $branch $commit"
 }
 
-# Optional boot splash image for patch 0009: BOOT_SPLASH names a raw
+# Optional boot splash image for the decon boot splash: BOOT_SPLASH names a raw
 # RGB565 file (little endian, BOOT_SPLASH_SIZE pixels, the panel size by
 # default: 450x450 on the R870, 396x396 on the R860). It is compressed
 # into decon_boot_splash_image.h in the kernel source; without BOOT_SPLASH

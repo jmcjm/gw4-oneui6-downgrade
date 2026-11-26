@@ -8,16 +8,12 @@ SPDX-License-Identifier: `GPL-2.0-or-later`
 
 This covers everything in this repository unless a section below says otherwise.
 
-## Kernel patches
-
-The files in `kernel/patches/` modify the Linux kernel source released by Samsung, which is licensed under the GNU General Public License, version 2 only. The patches are derived from it and are distributed under the same terms (`GPL-2.0-only`).
-
 ## Third-party material not in this repository
 
 The build combines this project with files that are not part of it and are not covered by this license:
 
 - **Samsung firmware**: the One UI 6 Watch images (`R870XXU1IYI1`, `R860XXU1IYI1`) and the TEE trustlets taken from the One UI 8 Watch vendor partition (`R870XXS2JZG3`, `R860XXS2JZG3`) belong to Samsung Electronics and its suppliers. The repository holds none of them, only checksums. You provide the firmware, and the built `boot.img` contains Samsung trustlets and the Samsung ramdisk, so built images must not be redistributed.
-- **The Samsung kernel source** is downloaded from [opensource.samsung.com](https://opensource.samsung.com) under the GNU General Public License, version 2.
+- **The kernel source** is fetched from [gw4-kernel-4.19](https://github.com/jmcjm/gw4-kernel-4.19): the Linux kernel source released by Samsung, merged with the CIP 4.19 kernel, with the changes for this project, under the GNU General Public License, version 2 only.
 - **The AOSP toolchain** (`clang-r383902`, `aarch64-linux-android-4.9`) is downloaded from [android.googlesource.com](https://android.googlesource.com) under its own licenses.
 - **Magisk** ([topjohnwu/Magisk](https://github.com/topjohnwu/Magisk), GNU General Public License, version 3): `magiskboot` is extracted from a Magisk APK you provide and runs as a separate program during the build, and the boot image you patch with Magisk contains its ramdisk. Neither is stored here.
 

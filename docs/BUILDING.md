@@ -23,7 +23,7 @@ export MODEL=R860
 ./build.sh images work-R860/magisk_patched.img
 ```
 
-`MODEL` changes three things: the kernel is built from `exynos5515-freshbs_defconfig`, the trustlets are checked against `overlay/trustlets-R860XXS2JZG3.sha256`, and `BOOT_SPLASH_SIZE` defaults to the 396x396 panel. Everything else is shared, because it is the same on both watches: the PIT (partition numbers and sizes, so also `PREINITDEVICE`), the SoC device tree in `boot` (byte for byte, in IYI1 and in JZG3), the names of the JZG3 trustlets (only their signatures differ), the two modules in `/lib/modules`, and the kernel source and patches. The two defconfigs differ in `CONFIG_SENSORS_SSP_HRM_ADI` only. The board device tree comes with the stock R860 `dtbo`.
+`MODEL` changes four things: the kernel source is the `r860-bl2` branch of gw4-kernel-4.19 (`kernel/source.txt`), the kernel is built from `exynos5515-freshbs_defconfig`, the trustlets are checked against `overlay/trustlets-R860XXS2JZG3.sha256`, and `BOOT_SPLASH_SIZE` defaults to the 396x396 panel. Everything else is shared, because it is the same on both watches: the PIT (partition numbers and sizes, so also `PREINITDEVICE`), the SoC device tree in `boot` (byte for byte, in IYI1 and in JZG3), the names of the JZG3 trustlets (only their signatures differ), the two modules in `/lib/modules`, and the kernel code (the two branches differ only in the SM-R870 device tree and defconfig). The two defconfigs differ in `CONFIG_SENSORS_SSP_HRM_ADI` only. The board device tree comes with the stock R860 `dtbo`.
 
 Flashing and the way back work as below, with the R860 images and an R860 backup. The R860 build has not been booted yet (`STATUS.md`).
 
@@ -57,17 +57,17 @@ Compare the hashes from the watch with `SHA256SUMS` before going on. Pulling `su
 ```bash
 ./build.sh tools Magisk-v31.1.apk   # x86_64 magiskboot -> tools/
 ./build.sh toolchain                # AOSP clang-r383902 and binutils 2.27, ~400 MB
-./build.sh source                   # Samsung source (~215 MB) + kernel/patches
+./build.sh source                   # kernel source, the pinned commit only (~200 MB)
 ./build.sh kernel                   # in a Debian bookworm container
 ```
 
-`source` downloads the three packages listed in `kernel/sources.txt` from opensource.samsung.com and checks their SHA-256. It unpacks them in order (base `R860XXU1IXK1`, then the SM-R870 device tree and `exynos5515-freshbl_defconfig`, then the `R870XXU1IYI1` kernel update) and applies the patches.
+`source` fetches the commit pinned in `kernel/source.txt` from [gw4-kernel-4.19](https://github.com/jmcjm/gw4-kernel-4.19), without history, to `work/kernel`: the `r870-bl2` branch for the SM-R870, `r860-bl2` for the SM-R860. That repository holds the Samsung 4.19.151 source (`R860XXU1IXK1` with the SM-R870 device tree and the `IYI1` update) merged with CIP `v4.19.325-cip137`, the 4.19.325 stable releases and the CIP backports after the end of 4.19.y, and on the `-bl2` branches the kernel changes for bootloader rev2, the charge limit and the boot splash, each as its own commit. The kernel reports `4.19.325-cip137-st21`.
 
-`kernel` builds `exynos5515-freshbl_defconfig` with the options in `kernel/nouh.config` disabled. The host programs of the 4.19 tree do not build with current OpenSSL and without libyaml, hence the container. The banner values (`KBUILD_BUILD_*` in `build.sh`) are those of the tested build, so with all patches (`0001` to `0009`) the result is byte for byte the flashed kernel; its hash is in `STATUS.md`.
+`kernel` builds `exynos5515-freshbl_defconfig` with the options in `kernel/nouh.config` disabled. The host programs of the 4.19 tree do not build with current OpenSSL and without libyaml, hence the container. The banner values (`KBUILD_BUILD_*` in `build.sh`) are fixed, so the result is byte for byte the kernel whose hash is in `STATUS.md`.
 
 ### Charge limit
 
-Patch `0008` adds the charge limit of later Samsung battery drivers to `/sys/class/power_supply/battery/`, under the same name:
+The `battery_v2` commit adds the charge limit of later Samsung battery drivers to `/sys/class/power_supply/battery/`, under the same name:
 
 | Node | Values | Default |
 |---|---|---|
@@ -91,7 +91,7 @@ With a limit above the current capacity, watch `capacity` and `status` while it 
 
 ### Boot splash
 
-Bootloader rev2 blanks the panel before it starts the kernel, and the MCD panel path of the display driver sends nothing to it until the first frame of the boot animation, about 20 s later. Patch `0009` draws a power symbol into the display framebuffer and sends it to the panel once, at the end of the display controller probe, about 1 s after power-on. The panel keeps the image in its own memory until SurfaceFlinger sends the next frame.
+Bootloader rev2 blanks the panel before it starts the kernel, and the MCD panel path of the display driver sends nothing to it until the first frame of the boot animation, about 20 s later. The `decon` boot splash commit draws a power symbol into the display framebuffer and sends it to the panel once, at the end of the display controller probe, about 1 s after power-on. The panel keeps the image in its own memory until SurfaceFlinger sends the next frame.
 
 The splash is `CONFIG_EXYNOS_DECON_BOOT_SPLASH` (on by default). To build without it, add a line `EXYNOS_DECON_BOOT_SPLASH` to `kernel/nouh.config`.
 

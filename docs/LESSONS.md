@@ -4,6 +4,8 @@ One UI 6 Watch (`R870XXU1IYI1`, Android 14, kernel 4.19) was built for bootloade
 
 Each problem was found from the bootloader and kernel log in `/proc/last_kmsg`, read from a recovery with root over Wi-Fi ([gw4-wifi-recovery](https://github.com/jmcjm/gw4-wifi-recovery)). That recovery has its own kernel and device tree, so it kept working through every failed boot.
 
+The kernel changes are commits on the `r870-bl2` and `r860-bl2` branches of [gw4-kernel-4.19](https://github.com/jmcjm/gw4-kernel-4.19). The numbers `0001` to `0009` below are their order there, on top of the Samsung source merged with CIP; they were patch files in this repository before.
+
 ## 1. Signed rev1 images are rejected
 
 Flashing the stock `boot`, `dtbo`, `vbmeta` and `vbmeta_system` of `R870XXU1IYI1` ends in the bootloader with:
@@ -54,7 +56,7 @@ acpm_ipc_probe+0xd0/0x788
 
 `acpm_ipc_probe` requests the interrupt before it maps the interrupt registers. With the rev2 APM firmware an interrupt is already pending, so the handler runs immediately and reads `NULL + INTSR1`. The 5.15 driver requests the interrupt at the end of probe. The shared SRAM layout (`struct acpm_framework`) is the same in both kernels for S5E5515.
 
-Fix: `kernel/patches/0001-acpm_ipc-...` moves the request to the end of probe.
+Fix: kernel change `0001` (`acpm_ipc: request the IRQ after the device is set up`) moves the request to the end of probe.
 
 ## 5. TEEgris rejects the One UI 6 trustlets
 
@@ -87,7 +89,7 @@ PC is at decon_update_regs+0xa7c/0xa80
 
 The panel (`rm69091`, id `0x413041`) reports `RDDPM 0x08`: normal mode, but sleep-in, display off and TE off. The rev2 bootloader initializes the panel with its own driver (`rm69091_watch4_large`) and shows the logo, but the 4.19 kernel finds it asleep. The kernel trusted the bootloader (`reset` GPIO high, so state `NORMAL`), skipped the init sequence and waited for a vsync that never came.
 
-Fix: `kernel/patches/0002-mcd_panel-...` treats a panel left on by the bootloader as powered but not initialized, so the first sleep-out runs the full init sequence (TE on, sleep out, display on).
+Fix: kernel change `0002` (`mcd_panel: always run the panel init sequence in the kernel`) treats a panel left on by the bootloader as powered but not initialized, so the first sleep-out runs the full init sequence (TE on, sleep out, display on).
 
 ## 7. The system partition carries kernel modules
 
@@ -114,9 +116,9 @@ With two cores running, the SoC still never reached system sleep: every attempt 
 
 The rev2 EL3 runs CPU power-off sequences only after the kernel sends `SMC_CMD_CPUPM_ENABLE` (`0x82000008`, argument 1). The 5.15 exynos-cpupm driver does it at the end of probe (`notify_cpupm_init_to_el3()`); the 4.19 driver never does. The 5.15 driver also handles the power modes differently from 4.19 (selected by `cal-id`, the PSCI state is always `0x00010000`, SICD with other wakeup masks and an APM notification), and so does its device tree node.
 
-Fix: `kernel/patches/0007-exynos-cpupm-...` ports the 5.15 driver, including the SMC at the end of probe, and `scripts/patch-dts.py` replaces the 4.19 `cpupm` node with the `exynos-cpupm` node of the rev2 device tree. A comparison of the cpuidle and hotplug paths of both kernels showed that the per-core PMU sequences, the PSCI calls and the GIC handling are otherwise the same. Confirmation that the firmware itself is fine came from the Wi-Fi recovery, which runs the 5.15 kernel on the same bootloader: there a CPU1 hotplug cycle and C2 on both cores work.
+Fix: kernel change `0007` (`exynos-cpupm: port the 5.15 driver for the rev2 EL3 and APM firmware`) ports the 5.15 driver, including the SMC at the end of probe, and `scripts/patch-dts.py` replaces the 4.19 `cpupm` node with the `exynos-cpupm` node of the rev2 device tree. A comparison of the cpuidle and hotplug paths of both kernels showed that the per-core PMU sequences, the PSCI calls and the GIC handling are otherwise the same. Confirmation that the firmware itself is fine came from the Wi-Fi recovery, which runs the 5.15 kernel on the same bootloader: there a CPU1 hotplug cycle and C2 on both cores work.
 
-Two earlier patches belong here as well. `0003` drops the `CLUSTER0_CPUx_INT_EN` writes of the 4.19 PMU sequences, as 5.15 does; the rev2 EL3 sets these bits itself after `SMC_CMD_CPUPM_ENABLE`. `0004` reads the time with `ktime_get_mono_fast_ns()` in the cpupm idle path, which also runs during suspend to idle with timekeeping suspended. Patch `0005` (park a core whose `CPU_OFF` returns) dates from before this was understood. With `0007` `CPU_OFF` does power the core down and the parking path is not used; it stays as a fallback.
+Two earlier kernel changes belong here as well. `0003` drops the `CLUSTER0_CPUx_INT_EN` writes of the 4.19 PMU sequences, as 5.15 does; the rev2 EL3 sets these bits itself after `SMC_CMD_CPUPM_ENABLE`. `0004` reads the time with `ktime_get_mono_fast_ns()` in the cpupm idle path, which also runs during suspend to idle with timekeeping suspended. Change `0005` (park a core whose `CPU_OFF` returns) dates from before this was understood. With `0007` `CPU_OFF` does power the core down and the parking path is not used; it stays as a fallback.
 
 ## 10. Both cores in C2 shared one saved context
 
@@ -124,7 +126,7 @@ With `SMC_CMD_CPUPM_ENABLE` sent, C2 worked on one core at a time, but with C2 o
 
 The Samsung 4.19 `arch/arm64/kernel/sleep.S` shifts a multithreading MPIDR right by 8 before it computes the `sleep_save_stash` index of the core, both when saving the context (`__cpu_suspend_enter`) and when restoring it (`_cpu_resume`). That matched the rev1 device tree (`0x0`, `0x1`). The hash mask is built from the device tree cpu reg values, which are now the real MPIDRs (`0x0`, `0x100`, problem 8), and the shifted MPIDR of both cores lands in the same slot. With both cores in C2, one resumed with the other's stack and page tables. The 5.15 `sleep.S` has no such shift. The hint came from a [kernel port for the Exynos 3830](https://github.com/rsuntk/android_kernel_samsung_exynos850-5.10/pull/2) that hit the mirror image of this problem (a 5.10 kernel on a 4.19-era EL3).
 
-Fix: `kernel/patches/0006-arm64-sleep-...` uses the MPIDR as it is.
+Fix: kernel change `0006` (`arm64: sleep: hash the MPIDR as it is for sleep_save_stash`) uses the MPIDR as it is.
 
 ## 11. The bootloader leaves its own display window enabled
 
@@ -140,7 +142,26 @@ Kernel panic - not syncing: (13820000.sysmmu) ... READ PAGE FAULT
 
 The DECON register dump printed with the fault showed `DATA_PATH_CONTROL_0` `0x11` (windows 0 and 1 enabled) and `DATA_PATH_CONTROL_1` `0x10` (window 1 on channel 1). Window 1, full screen, was the bootloader's, with the physical address of its own buffer in DPP1, programmed while the DPU SysMMU was bypassed. In the kernel that SysMMU translates from probe on (`sysmmu,hold-rpm-on-boot`), and its page table maps only what the kernel mapped. Our window was fine: DPP0 read the framebuffer at IOVA `0x10000000`, and the SysMMU TLB held its pages. The frame fetched both windows, and every SysMMU page fault is fatal (`exynos_sysmmu_irq()` retries only page table walk errors). Without the splash the first frame comes from the HWC, which programs or disables every window first, so the leftover window is never fetched.
 
-Fix: `kernel/patches/0009-decon-...` disables every window except the default one before it sends the frame.
+Fix: kernel change `0009` (`decon: show a boot splash on a panel handed over blank`) disables every window except the default one before it sends the frame.
+
+## 12. After the CIP merge, reserved memory is assigned twice
+
+The first boot of the kernel merged with CIP `v4.19.325-cip137` stopped with a black screen. `/proc/last_kmsg`:
+
+```
+Memlogger samsung,memlogger: memlog_init_rmem: fail to init device memory
+Memlogger: probe of samsung,memlogger failed with error -22
+Unable to handle kernel paging request at virtual address fffffffffffffff0
+pc : _raw_spin_lock_irqsave+0x30/0x5c
+     ida_alloc_range+0x64/0x3b0
+     _memlog_alloc+0x84/0x680
+     mfc_core_init_memlog+0x64/0xe4
+Kernel panic - not syncing: Fatal exception
+```
+
+The Samsung tree assigns the first `memory-region` of every platform device when it creates the device (`of_platform_device_create_pdata()`), and the memlogger, the DSIM display driver and `lpd_v2` assign the same region again in their probe. The second assignment used to be ignored; the CIP backport of upstream `504981db4f69` ("dma-coherent: report a failed reserved memory assignment") returns its `-EBUSY`. The memlogger probe failed, and the MFC driver used its missing descriptor.
+
+Fix: in gw4-kernel-4.19, `dma-coherent: accept the same reserved pool assigned to a device again` (on `main`).
 
 ## Hypervisor clients are disabled
 

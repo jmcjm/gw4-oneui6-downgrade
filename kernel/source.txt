@@ -1,0 +1,8 @@
+# Kernel source for each model: gw4-kernel-4.19, the Samsung 4.19.151
+# source (R860XXU1IXK1 + IYI1) merged with CIP v4.19.325-cip137, with the
+# SM-R870 device tree on r870-bl2 and the bootloader rev2 patches on both
+# -bl2 branches. `build.sh source` fetches the pinned commit.
+#
+# Fields: model, repository, branch (for reference), commit.
+R870 https://github.com/jmcjm/gw4-kernel-4.19.git r870-bl2 666e56aa98b57ce8cf8f5b9dee64dc12d9cf5876
+R860 https://github.com/jmcjm/gw4-kernel-4.19.git r860-bl2 e74c94c923795df0171c8fac5e3de90f0217ff6a
