@@ -51,6 +51,8 @@ The system partitions (`super`, `metadata`, `userdata`) are the stock One UI 6 o
 
 Then flash from the Wi-Fi recovery with `scripts/flash-chunks.sh`. Backup, the Magisk step, flashing, and the way back to One UI 8 are in `docs/BUILDING.md`.
 
+**Before the first boot, decide about `/data`:** the factory `userdata.img` is a 2 GiB filesystem on an 8.3 GiB partition. Flash a full-size empty image from `scripts/userdata/make-userdata.sh` instead to get the whole partition (checked on the host, a first boot from it not tested yet). Growing `/data` after the watch has been set up is possible without losing data, but only with the procedure in `docs/USERDATA.md`.
+
 ## Repository layout
 
 | Path | Contents |
@@ -60,14 +62,15 @@ Then flash from the Wi-Fi recovery with `scripts/flash-chunks.sh`. Backup, the M
 | `kernel/nouh.config` | Options disabled in `exynos5515-freshbl_defconfig` |
 | `overlay/` | Magisk `overlay.d` scripts and the expected trustlet hashes |
 | `scripts/` | Signature stripping, device tree patch, chunked flashing |
-| `docs/` | Building and flashing, verified state, lessons learned |
+| `scripts/userdata/` | Full-size userdata image, and the tools that grow an existing `/data` in place |
+| `docs/` | Building and flashing, verified state, lessons learned, growing `/data` |
 
 Not in the repository: firmware, trustlets, kernel source, toolchains, built images. They contain Samsung or third-party material; the build fetches or extracts them, and `work/` and `tools/` are ignored.
 
 ## Limitations
 
 - While a computer keeps an ADB connection open, the watch wakes from system sleep within a second; disconnect `adb` when the battery matters.
-- `/data` is the 2 GiB factory f2fs; the partition is larger.
+- With the factory `userdata.img`, `/data` is 2 GiB of the 8.3 GiB partition (see above and `docs/USERDATA.md`).
 - Only `R870XXU1IYI1` on bootloader `R870XXS2JZG3` has been booted. The SM-R860 build is untested.
 - Over-the-air updates must not be installed; they would bring back a signed rev2 system.
 

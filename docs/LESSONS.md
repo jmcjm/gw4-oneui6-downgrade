@@ -163,6 +163,14 @@ The Samsung tree assigns the first `memory-region` of every platform device when
 
 Fix: in gw4-kernel-4.19, `dma-coherent: accept the same reserved pool assigned to a device again` (on `main`).
 
+## 13. Growing /data destroys the relocated file blocks
+
+`/data` is the 2 GiB factory f2fs on an 8.3 GiB partition. Growing it offline (key of the `dm-default-key` device read from the kernel, partition decrypted on a PC, `resize.f2fs`, encrypted again) left Android booting, but Magisk showed "not installed", refused `su` to everyone, and the Magisk APK in `/data/app` had two blocks of noise in the middle of `libbusybox.so`.
+
+`resize.f2fs` had moved the main area from block 6656 to 17408 to make room for the larger NAT and SSA, and copied every valid block in between elsewhere. With `inlinecrypt`, file contents are encrypted with the FBE key only and bypass `dm-default-key`; decrypting them with the metadata key at the old block number and encrypting them at the new one destroyed 6064 blocks in 235 files. Blocks that did not move came out right, because XTS decrypt and encrypt at the same block number cancel out, so a comparison of the whole image with the device showed nothing.
+
+Fix: relocated blocks of encrypted regular files are written raw from the backup (`scripts/userdata/fix-fbe-blocks.py`). The procedure is in [USERDATA.md](USERDATA.md); for a new installation a full-size empty `userdata` avoids all of it.
+
 ## Hypervisor clients are disabled
 
 The kernel is built without `CONFIG_UH`, `CONFIG_RKP` and `CONFIG_KDP`. The bootloader loads the Samsung hypervisor (uH) at EL2 anyway; the 4.19 kernel only never calls it.

@@ -148,7 +148,7 @@ adb -s $S shell reboot
 
 `flash-chunks.sh` sends 128 MiB chunks with `adb push -z zstd`, writes each with `dd` at its offset, reads it back and finally compares the hash of the whole written range with the image. Do not use `adb exec-in` for this: in this recovery it truncates long streams.
 
-`userdata` is the factory image: a 2 GiB f2fs on a larger partition, the same as Odin writes. The One UI 6 fstab has no `resize`, so `/data` stays 2 GiB.
+`userdata` is the factory image: a 2 GiB f2fs on an 8.3 GiB partition, the same as Odin writes. The One UI 6 fstab has no `resize`, so `/data` stays 2 GiB. **Decide before the first boot:** to use the whole partition, flash a full-size empty image instead (`scripts/userdata/make-userdata.sh`, see [USERDATA.md](USERDATA.md); a first boot from it has not been tested yet). Growing `/data` later, once the watch is set up, is possible but far more work.
 
 The first boot takes long (metadata encryption setup, ART). The boot animation appears after about 45 s.
 

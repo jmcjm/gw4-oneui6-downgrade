@@ -2,3 +2,11 @@ work/
 work-R860/
 tools/
 *.img
+# out-of-tree build of scripts/userdata/gw4dmkey
+scripts/userdata/*.ko
+scripts/userdata/*.o
+scripts/userdata/*.mod.c
+scripts/userdata/.*.cmd
+scripts/userdata/.tmp_versions/
+scripts/userdata/Module.symvers
+scripts/userdata/modules.order
