@@ -47,11 +47,13 @@ Outputs of `build.sh images`:
 | `vbmeta.img` | `c2aa2079e68ebe788e04602c482288090f1f3ca62c71cff51a024503c8857153` |
 | `vbmeta_system.img` | `8d1d1df7ddb62bacaa15ade994f23749fd520e64d20526e76a34c9dab62c323f` |
 | `Image` (kernel, `build.sh kernel` without `BOOT_SPLASH`) | `e77f4266f890f0eb887407e26d900967d564edd3a1d5e065bc68ecd8a7dc6fe7` |
-| `boot.img` | `8a5fef36901489be3307d26b57da908f1797d7e4e970bbd68c06ccc5c5ea0f60` |
+| `boot.img` | `ef6aa54502cdb01f5b8471baef1e5784daa7e219970a3732284f347cd2e66b1b` |
 
 These are the outputs of the default build from this repository, with the power symbol as the boot splash. `dtbo`, `vbmeta` and `vbmeta_system` are byte for byte the images that were flashed and booted. `boot.img` depends on the Magisk APK given to `build.sh magisk`: this one was built with a Magisk 31.1 build of our own (`31.1-wear`, APK SHA-256 `56e3b8d1464536029f3c94f4dfe8851c27a8f245d0dcd2b3fba452755c52cdf8`), whose patched image (`work/magisk_patched.img`) is `fef81502b185f62dc654ac69661a29bda591b4a4ef9a4f65027127aa1016aae7`.
 
-The watch does not run this default `boot.img` byte for byte. It runs a variant built locally from the same sources and the same Magisk image, with a custom splash image given in `BOOT_SPLASH` (an image that is not part of this repository): `Image` `e59df6fb42fd52215ca5a5f6c587727eeac9c8ab5486d58a1c981f78eea9e416`, `boot.img` `31a830fd43a3fa082539dbc5fd0f4ccda7d967213195d55b18592612dae43003`. It differs from the default build only in the kernel, in the compressed image and the code that shows it; the ramdisk, the device tree and the other images are the same. `build.sh` fixes all embedded build times (initramfs, `__TIME__` in the Wi-Fi drivers, the banner), so its output does not depend on when it runs.
+The watch does not run this default `boot.img` byte for byte. The variant for the watch is built from the same sources and the same Magisk image, with a custom splash image given in `BOOT_SPLASH` (an image that is not part of this repository): `Image` `e59df6fb42fd52215ca5a5f6c587727eeac9c8ab5486d58a1c981f78eea9e416`, `boot.img` `48e82e2131d8b24dc283c50532235d14a72fa2164aac23857371d5fcac53b2cf`. It differs from the default build only in the kernel, in the compressed image and the code that shows it; the ramdisk, the device tree and the other images are the same.
+
+The watch runs `boot.img` `31a830fd43a3fa082539dbc5fd0f4ccda7d967213195d55b18592612dae43003`, which has the same kernel but was patched with an earlier Magisk `31.1-wear` build (`magisk` `fdbbb055`, `magiskinit` `76c4f100`) instead of the one in the APK above (`3e64a97c`, `9d60a0fd`). Both carry the same certificate (`CN=magisk-wear`, SHA-256 `c6f569c8…`), so the installed app is accepted and root works; the binaries differ only in build artefacts. The next flash brings the watch to `48e82e21…`. `build.sh` fixes all embedded build times (initramfs, `__TIME__` in the Wi-Fi drivers, the banner), so its output does not depend on when it runs.
 
 ## SM-R860
 
