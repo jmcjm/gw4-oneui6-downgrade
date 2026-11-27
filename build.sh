@@ -119,6 +119,10 @@ cmd_source() {
 # the header is removed and the kernel draws its power symbol.
 splash_header() {
     local h=$WORK/kernel/drivers/video/fbdev/exynos/dpu30/decon_boot_splash_image.h
+    # decon_core.c takes the header with __has_include, so kbuild records it
+    # as a dependency only when it existed at the last build: a header added
+    # since would not rebuild decon_core.o. Rebuild it every time instead.
+    rm -f "$WORK/out/drivers/video/fbdev/exynos/dpu30/decon_core.o"
     if [[ -z ${BOOT_SPLASH:-} ]]; then
         rm -f "$h"
         return
